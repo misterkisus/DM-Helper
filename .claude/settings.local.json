@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm --version)",
+      "Bash(npx --yes create-next-app@latest . --typescript --tailwind --app --src-dir --no-eslint --use-npm --import-alias \"@/*\" --turbopack --yes)",
+      "Bash(npx --yes create-next-app@latest pf2e-helper-tmp --typescript --tailwind --app --src-dir --no-eslint --use-npm --import-alias \"@/*\" --turbopack --yes)",
+      "Bash(npm install *)",
+      "Bash(npx prisma *)",
+      "Bash(npx tsc *)",
+      "Bash(npm run *)",
+      "Bash(PORT=3737 npm run dev)",
+      "Bash(curl -s -o /dev/null -w \"encounter:%{http_code}\\\\n\" http://localhost:3737/api/encounter)",
+      "Bash(curl -s -o /dev/null -w \"characters_noauth:%{http_code}\\\\n\" http://localhost:3737/api/characters)",
+      "Bash(curl -s -o /dev/null -w \"display:%{http_code}\\\\n\" http://localhost:3737/display)",
+      "Bash(curl -s -o /dev/null -w \"login:%{http_code}\\\\n\" http://localhost:3737/login)",
+      "Bash(curl -s -c /tmp/cj.txt -X POST -H \"content-type: application/json\" -d '{\"key\":\"changeme\"}' http://localhost:3737/api/auth)",
+      "Bash(curl -s -b /tmp/cj.txt http://localhost:3737/api/characters)",
+      "Bash(curl -s -b /tmp/cj.txt -X POST -H \"content-type: application/json\" -d '{\"name\":\"Тестомир\",\"isPlayer\":true,\"defaultInitMod\":3}' http://localhost:3737/api/characters)",
+      "Bash(curl -s -b /tmp/cj.txt -X POST -H \"content-type: application/json\" -d '{\"displayName\":\"Гоблин\",\"isPlayer\":false,\"initiative\":17,\"maxHp\":12}' http://localhost:3737/api/combatants)",
+      "Bash(curl -s -b /tmp/cj.txt -X POST -H \"content-type: application/json\" -d '{\"slug\":\"frightened\",\"value\":2}' http://localhost:3737/api/combatants/cmoa7ceuo0003vp68dsmgorqi/conditions)",
+      "Bash(curl -s http://localhost:3737/api/encounter)",
+      "Read(//tmp/**)",
+      "Bash(python -c \"import sys, json; e=json.load\\(sys.stdin\\); print\\('round=', e['round']\\); [print\\(' -', c['displayName'], 'init=', c['initiative'], 'cond=', [\\(x['slug'], x['value']\\) for x in c['conditions']]\\) for c in e['combatants']]\")",
+      "Bash(node -e \"const e=require\\('/tmp/enc.json'\\); console.log\\('round=',e.round\\); for\\(const c of e.combatants\\) console.log\\(' -', c.displayName, 'init=', c.initiative, 'cond=', c.conditions.map\\(x=>x.slug+\\(x.value?'/'+x.value:''\\)\\)\\)\")",
+      "Bash(node -e \"let d=''; process.stdin.on\\('data',c=>d+=c\\).on\\('end',\\(\\)=>{const e=JSON.parse\\(d\\); console.log\\('round=',e.round\\); for\\(const c of e.combatants\\) console.log\\(' -', c.displayName, 'init=', c.initiative, 'cond=', c.conditions.map\\(x=>x.slug+\\(x.value?'/'+x.value:''\\)\\).join\\(','\\)\\)}\\)\")",
+      "Bash(curl -s http://localhost:3737/display)",
+      "Bash(curl -s -i -m 2 http://localhost:3737/api/events)",
+      "Bash(curl -s -b /tmp/cj.txt -X POST -H \"content-type: application/json\" -d '{\"type\":\"clear\"}' http://localhost:3737/api/encounter/control)",
+      "Bash(curl -s -b /tmp/cj.txt -X DELETE http://localhost:3737/api/characters/cmoa7ceq90001vp68uajw1vn6)"
+    ]
+  }
+}
