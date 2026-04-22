@@ -14,7 +14,7 @@ export default async function DisplayPage() {
       : null;
 
   return (
-    <div className="min-h-screen w-full flex flex-col text-zinc-100 px-4 sm:px-8 md:px-12 py-6 sm:py-10">
+    <div className="min-h-screen w-full flex flex-col text-zinc-100 px-3 sm:px-8 md:px-12 py-4 sm:py-10">
       <LiveRefresher />
 
       <header className="anim-fade-up">
@@ -45,7 +45,7 @@ export default async function DisplayPage() {
 
       {active && (
         <section className="mt-5 sm:mt-8 grid gap-3 lg:grid-cols-[minmax(0,1.8fr)_minmax(280px,0.8fr)] anim-fade-up">
-          <div className="battle-card glass-strong rounded-[1.75rem] p-5 sm:p-7">
+          <div className="battle-card glass-strong rounded-[1.75rem] p-4 sm:p-7">
             <div className="text-[10px] sm:text-xs uppercase tracking-[0.35em] text-amber-200/70">
               Сейчас ходит
             </div>
@@ -68,16 +68,16 @@ export default async function DisplayPage() {
               </span>
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
-              <span className="glass rounded-full px-3 py-1 text-sm text-zinc-300">
+              <span className="glass rounded-full px-3 py-1 text-xs sm:text-sm text-zinc-300">
                 Инициатива <span className="text-amber-200 font-semibold tabular-nums">{active.initiative}</span>
               </span>
-              <span className="glass rounded-full px-3 py-1 text-sm text-zinc-300">
+              <span className="glass rounded-full px-3 py-1 text-xs sm:text-sm text-zinc-300">
                 Состояний <span className="text-amber-200 font-semibold tabular-nums">{active.conditions.length}</span>
               </span>
             </div>
           </div>
 
-          <aside className="glass rounded-[1.75rem] p-5 sm:p-6 flex flex-col justify-between gap-5">
+          <aside className="glass rounded-[1.75rem] p-4 sm:p-6 flex sm:flex-col justify-between gap-5">
             <div>
               <div className="text-[10px] uppercase tracking-[0.3em] text-zinc-500">Очередь</div>
               <div className="mt-2 font-serif text-3xl sm:text-4xl font-bold gold-text tabular-nums">
@@ -143,7 +143,7 @@ export default async function DisplayPage() {
                   />
 
                   {/* initiative shield */}
-                  <div className="flex items-center justify-center shrink-0 w-16 sm:w-24 md:w-28 border-r border-white/5">
+                  <div className="flex items-center justify-center shrink-0 w-14 sm:w-24 md:w-28 border-r border-white/5">
                     <div
                       className={[
                         "font-serif font-bold tabular-nums leading-none",
@@ -156,11 +156,11 @@ export default async function DisplayPage() {
                   </div>
 
                   {/* content */}
-                  <div className="flex-1 min-w-0 py-3 sm:py-4 md:py-5 px-4 sm:px-6">
+                  <div className="flex-1 min-w-0 py-3 sm:py-4 md:py-5 px-3 sm:px-6">
                     <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
                       <h2
                         className={[
-                          "font-serif font-semibold truncate",
+                          "font-serif font-semibold min-w-0 max-w-full truncate",
                           isActive ? "text-amber-50" : "text-zinc-100",
                         ].join(" ")}
                         style={{ fontSize: "clamp(1.1rem, 2.8vw, 2rem)" }}
@@ -204,7 +204,7 @@ export default async function DisplayPage() {
                   </div>
 
                   {/* position */}
-                  <div className="flex items-center pr-3 sm:pr-5 text-zinc-600 text-xs sm:text-sm tabular-nums font-serif">
+                  <div className="hidden min-[420px]:flex items-center pr-3 sm:pr-5 text-zinc-600 text-xs sm:text-sm tabular-nums font-serif">
                     {String(idx + 1).padStart(2, "0")}
                   </div>
 

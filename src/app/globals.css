@@ -48,6 +48,8 @@ body {
     var(--bg-0);
   background-attachment: fixed;
   position: relative;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
 }
 
 body::before {

@@ -47,7 +47,7 @@ const btnDanger = `${btnBase} bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 
 const btnEmerald = `${btnBase} bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-100 border border-emerald-400/30`;
 
 const inputBase =
-  "w-full px-3 py-2.5 rounded-xl bg-black/30 border border-white/10 focus:border-amber-300/50 outline-none transition text-[15px] placeholder:text-zinc-600";
+  "w-full min-h-11 px-3 py-2.5 rounded-xl bg-black/30 border border-white/10 focus:border-amber-300/50 outline-none transition text-[15px] placeholder:text-zinc-600";
 
 // ===================== root =====================
 
@@ -120,7 +120,7 @@ export default function DmClient(props: {
     );
 
   return (
-    <div className="min-h-screen pb-40">
+    <div className="min-h-screen pb-36 sm:pb-14">
       {/* ========================= HEADER ========================= */}
       <header className="sticky top-0 z-20 glass-strong border-b border-white/10">
         <div className="px-3 sm:px-4 py-3 max-w-3xl mx-auto">
@@ -148,7 +148,7 @@ export default function DmClient(props: {
             </button>
           </div>
 
-          <div className="mt-3 grid grid-cols-[1fr_2fr_auto] gap-2">
+          <div className="mt-3 hidden sm:grid grid-cols-[1fr_2fr_auto] gap-2">
             <button onClick={() => ctrl({ type: "prev" })} disabled={busy} className={`${btnDark} py-3 text-sm`}>
               ← Назад
             </button>
@@ -165,28 +165,28 @@ export default function DmClient(props: {
             </button>
           </div>
 
-          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-zinc-500">
-            <span className="min-w-0 truncate">
+          <div className="mt-2 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-x-3 sm:gap-y-1 text-[11px] text-zinc-500">
+            <span className="glass rounded-xl px-2.5 py-1.5 min-w-0 truncate col-span-2 sm:col-span-1 sm:bg-transparent sm:border-0 sm:p-0">
               Сейчас:{" "}
               <span className={activeCombatant ? "text-amber-100" : "text-zinc-600"}>
                 {activeCombatant?.displayName ?? "не выбран"}
               </span>
             </span>
-            <span>
+            <span className="glass rounded-xl px-2.5 py-1.5 sm:bg-transparent sm:border-0 sm:p-0">
               Игроки: <span className="text-emerald-200/80 tabular-nums">{playerCount}</span>
             </span>
-            <span>
+            <span className="glass rounded-xl px-2.5 py-1.5 sm:bg-transparent sm:border-0 sm:p-0">
               Мобы: <span className="text-rose-200/80 tabular-nums">{monsterCount}</span>
             </span>
             <span className="flex-1" />
-            <button onClick={() => ctrl({ type: "reset-round" })} className={`${btnGhost} px-2 py-1`}>
+            <button onClick={() => ctrl({ type: "reset-round" })} className={`${btnGhost} hidden sm:inline-flex px-2 py-1`}>
               Сброс раунда
             </button>
             <button
               onClick={() => {
                 if (confirm("Очистить весь бой?")) ctrl({ type: "clear" });
               }}
-              className={`${btnGhost} px-2 py-1 text-rose-400 hover:text-rose-300`}
+              className={`${btnGhost} hidden sm:inline-flex px-2 py-1 text-rose-400 hover:text-rose-300`}
             >
               Очистить бой
             </button>
@@ -272,6 +272,35 @@ export default function DmClient(props: {
             onDelete={(id) => mutate(() => fetch(`/api/characters/${id}`, { method: "DELETE" }))}
           />
         )}
+      </div>
+
+      <div className="sm:hidden fixed inset-x-0 bottom-0 z-30 px-3 pt-5 safe-bottom bg-gradient-to-t from-[#090704] via-[#090704]/95 to-transparent">
+        <div className="glass-strong rounded-2xl p-2 shadow-[0_-14px_50px_-22px_rgba(0,0,0,0.9)]">
+          <div className="grid grid-cols-[1fr_1.35fr_0.85fr] gap-2">
+            <button onClick={() => ctrl({ type: "prev" })} disabled={busy} className={`${btnDark} min-h-12 text-sm`}>
+              Назад
+            </button>
+            <button onClick={() => ctrl({ type: "next" })} disabled={busy} className={`${btnGold} min-h-12 text-sm font-bold`}>
+              След. ход
+            </button>
+            <button onClick={() => ctrl({ type: "publish" })} disabled={busy} className={`${btnEmerald} min-h-12 text-sm font-semibold`}>
+              Экран
+            </button>
+          </div>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <button onClick={() => ctrl({ type: "reset-round" })} className={`${btnGhost} min-h-9 text-xs`}>
+              Сброс раунда
+            </button>
+            <button
+              onClick={() => {
+                if (confirm("Очистить весь бой?")) ctrl({ type: "clear" });
+              }}
+              className={`${btnGhost} min-h-9 text-xs text-rose-400 hover:text-rose-300`}
+            >
+              Очистить бой
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -383,12 +412,12 @@ function CombatantCard(props: {
         ].join(" ")}
       />
 
-      <div className="flex items-center gap-3 p-3 pl-4">
+      <div className="grid grid-cols-[auto_1fr] sm:flex sm:items-center gap-3 p-3 pl-4">
         <NumberInput
           value={c.initiative}
           onChange={(v) => props.onUpdate(c.id, { initiative: v })}
           ariaLabel="Инициатива"
-          className={`w-14 h-12 text-center text-xl font-serif font-bold tabular-nums ${props.isActive ? "gold-text" : "text-zinc-200"}`}
+          className={`w-16 h-14 sm:w-14 sm:h-12 text-center text-2xl sm:text-xl font-serif font-bold tabular-nums ${props.isActive ? "gold-text" : "text-zinc-200"}`}
         />
 
         <div className="flex-1 min-w-0">
@@ -424,16 +453,22 @@ function CombatantCard(props: {
           </div>
         </div>
 
-        <button
-          onClick={() => props.onSetActive(c.id)}
-          className={`${props.isActive ? btnGold : btnDark} px-3 py-2 text-xs font-bold`}
-          title="Сделать активным"
-        >
-          Ход
-        </button>
-        <button onClick={() => setOpen((o) => !o)} className={`${btnGhost} px-2 py-2 text-sm`} aria-label="Развернуть">
-          {open ? "▲" : "▼"}
-        </button>
+        <div className="col-span-2 sm:col-span-1 grid grid-cols-[1fr_auto] sm:flex gap-2">
+          <button
+            onClick={() => props.onSetActive(c.id)}
+            className={`${props.isActive ? btnGold : btnDark} min-h-11 sm:min-h-0 px-3 py-2 text-xs font-bold`}
+            title="Сделать активным"
+          >
+            {props.isActive ? "Активен" : "Сделать ходом"}
+          </button>
+          <button
+            onClick={() => setOpen((o) => !o)}
+            className={`${btnGhost} min-h-11 sm:min-h-0 px-4 sm:px-2 py-2 text-sm`}
+            aria-label="Развернуть"
+          >
+            {open ? "Скрыть" : "Ещё"}
+          </button>
+        </div>
       </div>
 
       {c.conditions.length > 0 && (
@@ -590,7 +625,7 @@ function ConditionPicker(props: { defs: ConditionDef[]; onPick: (slug: string, v
             key={d.slug}
             onClick={() => props.onPick(d.slug, d.hasValue ? 1 : null)}
             title={d.desc}
-            className="text-xs px-2.5 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 hover:border-amber-300/40 transition active:scale-95"
+            className="min-h-9 text-xs px-2.5 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 hover:border-amber-300/40 transition active:scale-95"
           >
             {d.ru}
             {d.hasValue && <span className="text-amber-300/80 ml-0.5">*</span>}
@@ -612,107 +647,131 @@ function AddCombatant(props: {
   const [init, setInit] = useState("");
   const [name, setName] = useState("");
   const [hp, setHp] = useState("");
+  const [open, setOpen] = useState(props.encCombatants.length === 0);
 
   const inFight = new Set(props.encCombatants.map((c) => c.characterId).filter(Boolean) as string[]);
   const available = props.chars.filter((c) => !inFight.has(c.id));
   const selected = props.chars.find((c) => c.id === charId);
 
+  useEffect(() => {
+    if (props.encCombatants.length === 0) setOpen(true);
+  }, [props.encCombatants.length]);
+
   return (
     <div className="glass rounded-2xl p-3 space-y-3 mt-4">
-      <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 px-1">Добавить в бой</div>
-      <div className="grid grid-cols-2 gap-2">
-        <button onClick={() => setMode("player")} className={mode === "player" ? `${btnGold} py-2 text-sm` : `${btnDark} py-2 text-sm`}>
-          Из библиотеки
-        </button>
-        <button onClick={() => setMode("monster")} className={mode === "monster" ? `${btnGold} py-2 text-sm` : `${btnDark} py-2 text-sm`}>
-          Монстр
-        </button>
-      </div>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between gap-3 text-left rounded-xl px-1 py-1"
+      >
+        <span>
+          <span className="block text-[10px] uppercase tracking-[0.2em] text-zinc-500">Добавить в бой</span>
+          <span className="block mt-1 font-serif text-lg text-amber-50">
+            {open ? "Выбери участника" : "Игрок или монстр"}
+          </span>
+        </span>
+        <span className={`${btnGold} w-10 h-10 text-xl`} aria-hidden="true">
+          {open ? "−" : "+"}
+        </span>
+      </button>
 
-      {mode === "player" ? (
-        <div className="grid grid-cols-[1fr_auto] sm:grid-cols-[1fr_auto_auto] gap-2">
-          <select
-            value={charId}
-            onChange={(e) => {
-              setCharId(e.target.value);
-              const s = props.chars.find((c) => c.id === e.target.value);
-              if (s && !init) setInit(String(s.defaultInitMod));
-            }}
-            disabled={available.length === 0}
-            className={`${inputBase} col-span-2 sm:col-span-1`}
-          >
-            <option value="">— выбрать —</option>
-            {available.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name} {c.isPlayer ? "" : "(моб)"}
-              </option>
-            ))}
-          </select>
-          <input
-            value={init}
-            onChange={(e) => setInit(e.target.value.replace(/[^0-9-]/g, ""))}
-            placeholder="иниц."
-            inputMode="numeric"
-            className={`${inputBase} w-20 text-center`}
-          />
-          <button
-            onClick={() => {
-              if (!charId) return;
-              const n = parseInt(init, 10);
-              props.onAddChar(charId, Number.isFinite(n) ? n : 0);
-              setCharId("");
-              setInit("");
-            }}
-            disabled={!charId}
-            className={`${btnEmerald} px-4 py-2 text-lg font-bold`}
-          >
-            +
-          </button>
-        </div>
-      ) : (
-        <div className="grid grid-cols-[1fr_1fr_auto] sm:grid-cols-[1fr_auto_auto_auto] gap-2">
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Имя" className={`${inputBase} col-span-3 sm:col-span-1`} />
-          <input
-            value={hp}
-            onChange={(e) => setHp(e.target.value.replace(/[^0-9]/g, ""))}
-            placeholder="HP"
-            inputMode="numeric"
-            className={`${inputBase} text-center sm:w-16`}
-          />
-          <input
-            value={init}
-            onChange={(e) => setInit(e.target.value.replace(/[^0-9-]/g, ""))}
-            placeholder="иниц."
-            inputMode="numeric"
-            className={`${inputBase} text-center sm:w-20`}
-          />
-          <button
-            onClick={() => {
-              if (!name.trim()) return;
-              const n = parseInt(init, 10);
-              const h = parseInt(hp, 10);
-              props.onAddMonster(name.trim(), Number.isFinite(n) ? n : 0, Number.isFinite(h) ? h : undefined);
-              setName("");
-              setInit("");
-              setHp("");
-            }}
-            disabled={!name.trim()}
-            className={`${btnEmerald} px-4 py-2 text-lg font-bold`}
-          >
-            +
-          </button>
-        </div>
-      )}
+      {open && (
+        <div className="space-y-3 anim-fade-in">
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={() => setMode("player")} className={mode === "player" ? `${btnGold} min-h-11 text-sm` : `${btnDark} min-h-11 text-sm`}>
+              Из библиотеки
+            </button>
+            <button onClick={() => setMode("monster")} className={mode === "monster" ? `${btnGold} min-h-11 text-sm` : `${btnDark} min-h-11 text-sm`}>
+              Монстр
+            </button>
+          </div>
 
-      {mode === "player" && available.length === 0 && (
-        <div className="text-xs text-zinc-500 px-1">
-          Все персонажи из библиотеки уже добавлены в бой.
-        </div>
-      )}
+          {mode === "player" ? (
+            <div className="grid grid-cols-[1fr_auto] sm:grid-cols-[1fr_auto_auto] gap-2">
+              <select
+                value={charId}
+                onChange={(e) => {
+                  setCharId(e.target.value);
+                  const s = props.chars.find((c) => c.id === e.target.value);
+                  if (s && !init) setInit(String(s.defaultInitMod));
+                }}
+                disabled={available.length === 0}
+                className={`${inputBase} min-h-12 col-span-2 sm:col-span-1`}
+              >
+                <option value="">— выбрать —</option>
+                {available.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} {c.isPlayer ? "" : "(моб)"}
+                  </option>
+                ))}
+              </select>
+              <input
+                value={init}
+                onChange={(e) => setInit(e.target.value.replace(/[^0-9-]/g, ""))}
+                placeholder="иниц."
+                inputMode="numeric"
+                className={`${inputBase} min-h-12 w-20 text-center`}
+              />
+              <button
+                onClick={() => {
+                  if (!charId) return;
+                  const n = parseInt(init, 10);
+                  props.onAddChar(charId, Number.isFinite(n) ? n : 0);
+                  setCharId("");
+                  setInit("");
+                }}
+                disabled={!charId}
+                className={`${btnEmerald} min-h-12 px-4 text-lg font-bold`}
+              >
+                +
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-[1fr_1fr_auto] sm:grid-cols-[1fr_auto_auto_auto] gap-2">
+              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Имя" className={`${inputBase} min-h-12 col-span-3 sm:col-span-1`} />
+              <input
+                value={hp}
+                onChange={(e) => setHp(e.target.value.replace(/[^0-9]/g, ""))}
+                placeholder="HP"
+                inputMode="numeric"
+                className={`${inputBase} min-h-12 text-center sm:w-16`}
+              />
+              <input
+                value={init}
+                onChange={(e) => setInit(e.target.value.replace(/[^0-9-]/g, ""))}
+                placeholder="иниц."
+                inputMode="numeric"
+                className={`${inputBase} min-h-12 text-center sm:w-20`}
+              />
+              <button
+                onClick={() => {
+                  if (!name.trim()) return;
+                  const n = parseInt(init, 10);
+                  const h = parseInt(hp, 10);
+                  props.onAddMonster(name.trim(), Number.isFinite(n) ? n : 0, Number.isFinite(h) ? h : undefined);
+                  setName("");
+                  setInit("");
+                  setHp("");
+                }}
+                disabled={!name.trim()}
+                className={`${btnEmerald} min-h-12 px-4 text-lg font-bold`}
+              >
+                +
+              </button>
+            </div>
+          )}
 
-      {mode === "player" && selected && (
-        <div className="text-xs text-zinc-500 px-1">
-          Бонус к инициативе: <span className="text-amber-200/80 font-semibold">{selected.defaultInitMod >= 0 ? `+${selected.defaultInitMod}` : selected.defaultInitMod}</span>
+          {mode === "player" && available.length === 0 && (
+            <div className="text-xs text-zinc-500 px-1">
+              Все персонажи из библиотеки уже добавлены в бой.
+            </div>
+          )}
+
+          {mode === "player" && selected && (
+            <div className="text-xs text-zinc-500 px-1">
+              Бонус к инициативе: <span className="text-amber-200/80 font-semibold">{selected.defaultInitMod >= 0 ? `+${selected.defaultInitMod}` : selected.defaultInitMod}</span>
+            </div>
+          )}
         </div>
       )}
     </div>
