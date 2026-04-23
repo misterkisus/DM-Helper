@@ -32,25 +32,33 @@ function queueFromActive(items: Combatant[], activeId: string | null) {
 
 function buildRepeatingBelt(queue: Combatant[], targetSlots: number): BeltEntry[] {
   if (!queue.length) return [];
-  const cycle = queue.length > 1 ? [...queue.slice(1), queue[0]] : [queue[0]];
   const items: BeltEntry[] = [];
+  const remainder = queue.length > 1 ? queue.slice(1) : [];
+  const nextRoundCycle = queue;
   let tokenCount = 0;
+
+  for (let i = 0; i < remainder.length && tokenCount < targetSlots; i += 1) {
+    items.push({
+      type: "token",
+      combatant: remainder[i],
+      isWrapPreview: false,
+      renderKey: `remainder:${remainder[i].id}:${i}`,
+    });
+    tokenCount += 1;
+  }
+
+  if (queue.length > 1 && tokenCount < targetSlots) {
+    items.push({ type: "divider", renderKey: "divider:next-round" });
+  }
+
   let cycleIndex = 0;
-
   while (tokenCount < targetSlots) {
-    for (let i = 0; i < cycle.length && tokenCount < targetSlots; i += 1) {
-      const combatant = cycle[i];
-      const isWrapPreview = combatant.id === queue[0]?.id;
-
-      if (isWrapPreview && tokenCount > 0) {
-        items.push({ type: "divider", renderKey: `divider:${cycleIndex}:${tokenCount}` });
-      }
-
+    for (let i = 0; i < nextRoundCycle.length && tokenCount < targetSlots; i += 1) {
       items.push({
         type: "token",
-        combatant,
-        isWrapPreview,
-        renderKey: `${combatant.id}:${cycleIndex}:${i}`,
+        combatant: nextRoundCycle[i],
+        isWrapPreview: cycleIndex === 0 && i === 0,
+        renderKey: `cycle:${cycleIndex}:${nextRoundCycle[i].id}:${i}`,
       });
       tokenCount += 1;
     }
@@ -70,7 +78,7 @@ function Portrait(props: {
     props.fit === "contain"
       ? "object-contain object-center p-1.5 bg-black/70"
       : props.fit === "contain-top"
-        ? "object-contain object-top px-1.5 pt-1.5 pb-0 bg-black/78"
+        ? "object-cover object-[center_18%]"
         : "object-cover object-center";
 
   return (
@@ -138,7 +146,7 @@ function QueueToken(props: {
         fit={big ? "contain-top" : "cover"}
         className={[
           "absolute inset-x-0",
-          big ? "top-[2.55rem] bottom-[4.75rem] sm:top-[2.7rem] sm:bottom-[5.2rem]" : "top-0 bottom-[2.8rem] sm:bottom-[3.15rem]",
+          big ? "top-0 bottom-[4.75rem] sm:bottom-[5.2rem]" : "top-0 bottom-[2.8rem] sm:bottom-[3.15rem]",
         ].join(" ")}
       />
 
