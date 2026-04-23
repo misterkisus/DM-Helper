@@ -7,14 +7,16 @@ import DmClient from "./DmClient";
 export const dynamic = "force-dynamic";
 
 export default async function DmPage() {
-  const [enc, characters] = await Promise.all([
+  const [enc, characters, images] = await Promise.all([
     getCurrentEncounter(),
     prisma.character.findMany({ orderBy: [{ isPlayer: "desc" }, { name: "asc" }] }),
+    prisma.sceneImage.findMany({ orderBy: { createdAt: "desc" } }),
   ]);
   return (
     <DmClient
       initialEncounter={enc}
       initialCharacters={characters}
+      initialImages={images}
       conditions={CONDITIONS}
       skills={SKILLS}
       simpleDcs={SIMPLE_DCS}

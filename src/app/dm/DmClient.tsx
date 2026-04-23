@@ -26,6 +26,8 @@ type Encounter = {
   round: number;
   activeId: string | null;
   status: string;
+  displayMode: string;
+  activeImageId: string | null;
   combatants: Combatant[];
 };
 type Character = {
@@ -34,6 +36,15 @@ type Character = {
   isPlayer: boolean;
   defaultInitMod: number;
   notes: string | null;
+};
+type SceneImage = {
+  id: string;
+  name: string;
+  path: string;
+  mimeType: string;
+  width: number | null;
+  height: number | null;
+  createdAt: string | Date;
 };
 
 // ===================== primitives =====================
@@ -55,6 +66,7 @@ const inputBase =
 export default function DmClient(props: {
   initialEncounter: Encounter;
   initialCharacters: Character[];
+  initialImages: SceneImage[];
   conditions: ConditionDef[];
   skills: SkillDef[];
   simpleDcs: DcRow[];
@@ -65,19 +77,26 @@ export default function DmClient(props: {
   const router = useRouter();
   const [enc, setEnc] = useState(props.initialEncounter);
   const [chars, setChars] = useState(props.initialCharacters);
+  const [images, setImages] = useState(props.initialImages);
   const [busy, startTransition] = useTransition();
-  const [tab, setTab] = useState<"fight" | "library" | "skills">("fight");
+  const [tab, setTab] = useState<"fight" | "library" | "skills" | "gallery">(
+    props.initialEncounter.displayMode === "exploration" ? "gallery" : "fight",
+  );
   const activeCombatant = enc.combatants.find((c) => c.id === enc.activeId);
   const playerCount = enc.combatants.filter((c) => c.isPlayer).length;
   const monsterCount = enc.combatants.length - playerCount;
+  const isExploration = enc.displayMode === "exploration";
+  const activeImage = images.find((i) => i.id === enc.activeImageId) ?? null;
 
   async function refresh() {
-    const [e, c] = await Promise.all([
+    const [e, c, i] = await Promise.all([
       fetch("/api/encounter").then((r) => r.json()),
       fetch("/api/characters").then((r) => r.json()),
+      fetch("/api/images").then((r) => r.json()),
     ]);
     setEnc(e);
     setChars(c);
+    setImages(i);
   }
 
   function mutate(fn: () => Promise<unknown>) {
@@ -129,7 +148,7 @@ export default function DmClient(props: {
     <div className="min-h-screen pb-36 sm:pb-14">
       {/* ========================= HEADER ========================= */}
       <header className="sticky top-0 z-20 glass-strong border-b border-white/10">
-        <div className="px-3 sm:px-4 py-3 max-w-3xl mx-auto">
+        <div className="px-3 sm:px-4 py-3 max-w-3xl mx-auto space-y-3">
           <div className="flex items-center gap-2">
             <input
               value={enc.name}
@@ -137,10 +156,12 @@ export default function DmClient(props: {
               onBlur={(e) => ctrl({ type: "rename", name: e.target.value })}
               className="flex-1 bg-transparent font-serif text-lg sm:text-xl font-semibold text-amber-50 outline-none border-b border-transparent focus:border-amber-300/40 pb-0.5 min-w-0"
             />
-            <div className="glass rounded-xl px-3 py-1.5 flex items-center gap-2">
-              <span className="text-[10px] uppercase tracking-wider text-zinc-500">Раунд</span>
-              <span className="font-serif text-xl font-bold gold-text tabular-nums leading-none">{enc.round}</span>
-            </div>
+            {!isExploration && (
+              <div className="glass rounded-xl px-3 py-1.5 flex items-center gap-2">
+                <span className="text-[10px] uppercase tracking-wider text-zinc-500">Раунд</span>
+                <span className="font-serif text-xl font-bold gold-text tabular-nums leading-none">{enc.round}</span>
+              </div>
+            )}
             <button
               onClick={async () => {
                 await fetch("/api/auth", { method: "DELETE" });
@@ -154,76 +175,116 @@ export default function DmClient(props: {
             </button>
           </div>
 
-          <div className="mt-3 hidden sm:grid grid-cols-[1fr_2fr_auto] gap-2">
-            <button onClick={() => ctrl({ type: "prev" })} disabled={busy} className={`${btnDark} py-3 text-sm`}>
-              ← Назад
-            </button>
-            <button onClick={() => ctrl({ type: "next" })} disabled={busy} className={`${btnGold} py-3 text-sm font-bold`}>
-              След. ход →
-            </button>
-            <button
-              onClick={() => ctrl({ type: "publish" })}
-              disabled={busy}
-              className={`${btnEmerald} px-3 py-3 text-sm font-semibold`}
-              title="Опубликовать на планшет"
-            >
-              Экран
-            </button>
-          </div>
+          <ModeToggle
+            mode={isExploration ? "exploration" : "scene"}
+            busy={busy}
+            onChange={(m) => {
+              if ((m === "exploration") === isExploration) return;
+              if (m === "exploration") setTab("gallery");
+              else setTab("fight");
+              ctrl({ type: "set-mode", mode: m });
+            }}
+          />
 
-          <div className="mt-2 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-x-3 sm:gap-y-1 text-[11px] text-zinc-500">
-            <span className="glass rounded-xl px-2.5 py-1.5 min-w-0 truncate col-span-2 sm:col-span-1 sm:bg-transparent sm:border-0 sm:p-0">
-              Сейчас:{" "}
-              <span className={activeCombatant ? "text-amber-100" : "text-zinc-600"}>
-                {activeCombatant?.displayName ?? "не выбран"}
+          {!isExploration && (
+            <>
+              <div className="hidden sm:grid grid-cols-[1fr_2fr_auto] gap-2">
+                <button onClick={() => ctrl({ type: "prev" })} disabled={busy} className={`${btnDark} py-3 text-sm`}>
+                  ← Назад
+                </button>
+                <button onClick={() => ctrl({ type: "next" })} disabled={busy} className={`${btnGold} py-3 text-sm font-bold`}>
+                  След. ход →
+                </button>
+                <button
+                  onClick={() => ctrl({ type: "publish" })}
+                  disabled={busy}
+                  className={`${btnEmerald} px-3 py-3 text-sm font-semibold`}
+                  title="Обновить экран"
+                >
+                  Обновить
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-x-3 sm:gap-y-1 text-[11px] text-zinc-500">
+                <span className="glass rounded-xl px-2.5 py-1.5 min-w-0 truncate col-span-2 sm:col-span-1 sm:bg-transparent sm:border-0 sm:p-0">
+                  Сейчас:{" "}
+                  <span className={activeCombatant ? "text-amber-100" : "text-zinc-600"}>
+                    {activeCombatant?.displayName ?? "не выбран"}
+                  </span>
+                </span>
+                <span className="glass rounded-xl px-2.5 py-1.5 sm:bg-transparent sm:border-0 sm:p-0">
+                  Игроки: <span className="text-emerald-200/80 tabular-nums">{playerCount}</span>
+                </span>
+                <span className="glass rounded-xl px-2.5 py-1.5 sm:bg-transparent sm:border-0 sm:p-0">
+                  Мобы: <span className="text-rose-200/80 tabular-nums">{monsterCount}</span>
+                </span>
+                <span className="flex-1" />
+                <button onClick={() => ctrl({ type: "reset-round" })} className={`${btnGhost} hidden sm:inline-flex px-2 py-1`}>
+                  Сброс раунда
+                </button>
+                <button
+                  onClick={() => {
+                    if (confirm("Очистить весь бой?")) ctrl({ type: "clear" });
+                  }}
+                  className={`${btnGhost} hidden sm:inline-flex px-2 py-1 text-rose-400 hover:text-rose-300`}
+                >
+                  Очистить бой
+                </button>
+              </div>
+            </>
+          )}
+
+          {isExploration && (
+            <div className="text-[11px] text-zinc-500 flex items-center gap-2 flex-wrap">
+              <span>На экране:</span>
+              <span className={activeImage ? "text-amber-100" : "text-zinc-600"}>
+                {activeImage?.name ?? "пусто"}
               </span>
-            </span>
-            <span className="glass rounded-xl px-2.5 py-1.5 sm:bg-transparent sm:border-0 sm:p-0">
-              Игроки: <span className="text-emerald-200/80 tabular-nums">{playerCount}</span>
-            </span>
-            <span className="glass rounded-xl px-2.5 py-1.5 sm:bg-transparent sm:border-0 sm:p-0">
-              Мобы: <span className="text-rose-200/80 tabular-nums">{monsterCount}</span>
-            </span>
-            <span className="flex-1" />
-            <button onClick={() => ctrl({ type: "reset-round" })} className={`${btnGhost} hidden sm:inline-flex px-2 py-1`}>
-              Сброс раунда
-            </button>
-            <button
-              onClick={() => {
-                if (confirm("Очистить весь бой?")) ctrl({ type: "clear" });
-              }}
-              className={`${btnGhost} hidden sm:inline-flex px-2 py-1 text-rose-400 hover:text-rose-300`}
-            >
-              Очистить бой
-            </button>
-          </div>
+              {activeImage && (
+                <button
+                  onClick={() => ctrl({ type: "set-image", imageId: null })}
+                  className={`${btnGhost} px-2 py-1 text-[11px] ml-auto`}
+                >
+                  Скрыть
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </header>
 
       {/* ========================= TABS ========================= */}
       <div className="max-w-3xl mx-auto px-3 sm:px-4 mt-4">
-        <div className="glass rounded-2xl p-1 grid grid-cols-3 relative">
+        <div className="glass rounded-2xl p-1 grid grid-cols-4 relative">
           <div
-            className="absolute top-1 bottom-1 w-1/3 rounded-xl bg-gradient-to-b from-amber-200 via-amber-300 to-amber-500 transition-transform duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] shadow-[0_4px_20px_-6px_rgba(232,193,112,0.5)]"
-            style={{ transform: `translateX(${tab === "fight" ? 0 : tab === "library" ? 100 : 200}%)` }}
+            className="absolute top-1 bottom-1 w-1/4 rounded-xl bg-gradient-to-b from-amber-200 via-amber-300 to-amber-500 transition-transform duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] shadow-[0_4px_20px_-6px_rgba(232,193,112,0.5)]"
+            style={{
+              transform: `translateX(${tab === "fight" ? 0 : tab === "library" ? 100 : tab === "skills" ? 200 : 300}%)`,
+            }}
           />
           <button
             onClick={() => setTab("fight")}
-            className={`relative z-10 py-2.5 text-sm font-semibold transition ${tab === "fight" ? "text-zinc-900" : "text-zinc-300"}`}
+            className={`relative z-10 py-2.5 text-xs sm:text-sm font-semibold transition ${tab === "fight" ? "text-zinc-900" : "text-zinc-300"}`}
           >
             Бой · {enc.combatants.length}
           </button>
           <button
             onClick={() => setTab("library")}
-            className={`relative z-10 py-2.5 text-sm font-semibold transition ${tab === "library" ? "text-zinc-900" : "text-zinc-300"}`}
+            className={`relative z-10 py-2.5 text-xs sm:text-sm font-semibold transition ${tab === "library" ? "text-zinc-900" : "text-zinc-300"}`}
           >
             Игроки · {chars.length}
           </button>
           <button
             onClick={() => setTab("skills")}
-            className={`relative z-10 py-2.5 text-sm font-semibold transition ${tab === "skills" ? "text-zinc-900" : "text-zinc-300"}`}
+            className={`relative z-10 py-2.5 text-xs sm:text-sm font-semibold transition ${tab === "skills" ? "text-zinc-900" : "text-zinc-300"}`}
           >
             Навыки · {props.skills.length}
+          </button>
+          <button
+            onClick={() => setTab("gallery")}
+            className={`relative z-10 py-2.5 text-xs sm:text-sm font-semibold transition ${tab === "gallery" ? "text-zinc-900" : "text-zinc-300"}`}
+          >
+            Галерея · {images.length}
           </button>
         </div>
       </div>
@@ -294,8 +355,44 @@ export default function DmClient(props: {
             levelDcs={props.levelDcs}
           />
         )}
+        {tab === "gallery" && (
+          <GalleryTab
+            images={images}
+            activeImageId={enc.activeImageId}
+            isExploration={isExploration}
+            busy={busy}
+            onShow={(id) => ctrl({ type: "set-image", imageId: id })}
+            onHide={() => ctrl({ type: "set-image", imageId: null })}
+            onUpload={async (file, name) => {
+              const fd = new FormData();
+              fd.append("file", file);
+              if (name) fd.append("name", name);
+              startTransition(async () => {
+                const res = await fetch("/api/images", { method: "POST", body: fd });
+                if (!res.ok) {
+                  alert("Не удалось загрузить картинку");
+                  return;
+                }
+                await refresh();
+                router.refresh();
+              });
+            }}
+            onRename={(id, name) =>
+              mutate(() =>
+                fetch(`/api/images/${id}`, {
+                  method: "PATCH",
+                  headers: { "content-type": "application/json" },
+                  body: JSON.stringify({ name }),
+                }),
+              )
+            }
+            onDelete={(id) => mutate(() => fetch(`/api/images/${id}`, { method: "DELETE" }))}
+            onSwitchToExploration={() => ctrl({ type: "set-mode", mode: "exploration" })}
+          />
+        )}
       </div>
 
+      {!isExploration && (
       <div className="sm:hidden fixed inset-x-0 bottom-0 z-30 px-3 pt-5 safe-bottom bg-gradient-to-t from-[#090704] via-[#090704]/95 to-transparent">
         <div className="glass-strong rounded-2xl p-2 shadow-[0_-14px_50px_-22px_rgba(0,0,0,0.9)]">
           <div className="grid grid-cols-[1fr_1.35fr_0.85fr] gap-2">
@@ -324,6 +421,40 @@ export default function DmClient(props: {
           </div>
         </div>
       </div>
+      )}
+    </div>
+  );
+}
+
+// ===================== MODE TOGGLE =====================
+
+function ModeToggle(props: {
+  mode: "scene" | "exploration";
+  busy: boolean;
+  onChange: (m: "scene" | "exploration") => void;
+}) {
+  return (
+    <div className="glass rounded-2xl p-1 grid grid-cols-2 relative">
+      <div
+        className="absolute top-1 bottom-1 w-1/2 rounded-xl bg-gradient-to-b from-amber-200 via-amber-300 to-amber-500 transition-transform duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] shadow-[0_4px_20px_-6px_rgba(232,193,112,0.5)]"
+        style={{ transform: `translateX(${props.mode === "scene" ? 0 : 100}%)` }}
+      />
+      <button
+        type="button"
+        onClick={() => props.onChange("scene")}
+        disabled={props.busy}
+        className={`relative z-10 py-2 text-xs sm:text-sm font-semibold transition ${props.mode === "scene" ? "text-zinc-900" : "text-zinc-300"}`}
+      >
+        ⚔ Сцена
+      </button>
+      <button
+        type="button"
+        onClick={() => props.onChange("exploration")}
+        disabled={props.busy}
+        className={`relative z-10 py-2 text-xs sm:text-sm font-semibold transition ${props.mode === "exploration" ? "text-zinc-900" : "text-zinc-300"}`}
+      >
+        🗺 Исследование
+      </button>
     </div>
   );
 }
@@ -1146,6 +1277,265 @@ function DcReference(props: {
             </div>
           ))}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ===================== GALLERY TAB =====================
+
+function GalleryTab(props: {
+  images: SceneImage[];
+  activeImageId: string | null;
+  isExploration: boolean;
+  busy: boolean;
+  onShow: (id: string) => void;
+  onHide: () => void;
+  onUpload: (file: File, name?: string) => void;
+  onRename: (id: string, name: string) => void;
+  onDelete: (id: string) => void;
+  onSwitchToExploration: () => void;
+}) {
+  const [q, setQ] = useState("");
+  const deferredQ = useDeferredValue(q);
+  const normalizedQ = deferredQ.trim().toLowerCase();
+  const filtered = useMemo(
+    () =>
+      props.images.filter(
+        (i) => !normalizedQ || i.name.toLowerCase().includes(normalizedQ),
+      ),
+    [props.images, normalizedQ],
+  );
+
+  return (
+    <div className="px-3 sm:px-4 mt-4 space-y-2.5">
+      {!props.isExploration && (
+        <div className="glass rounded-2xl p-3 flex items-center gap-3 anim-fade-in">
+          <div className="text-2xl">💡</div>
+          <div className="flex-1 text-xs text-zinc-400">
+            Сейчас активна «Сцена». Чтобы картинки отображались на экране, переключись на «Исследование».
+          </div>
+          <button
+            onClick={props.onSwitchToExploration}
+            disabled={props.busy}
+            className={`${btnGold} px-3 py-2 text-xs font-bold whitespace-nowrap`}
+          >
+            В исследование
+          </button>
+        </div>
+      )}
+
+      <UploadBox busy={props.busy} onUpload={props.onUpload} />
+
+      <div className="glass rounded-2xl p-3">
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Найти картинку..."
+          className={inputBase}
+        />
+      </div>
+
+      {filtered.length === 0 && (
+        <div className="glass rounded-2xl p-6 text-center text-zinc-500 anim-fade-in">
+          <div className="font-serif italic">
+            {props.images.length === 0 ? "Галерея пуста" : "Ничего не найдено"}
+          </div>
+          <div className="text-xs mt-1">
+            {props.images.length === 0
+              ? "Загрузи картинки — их можно будет показывать игрокам в один тап"
+              : "Попробуй другой запрос"}
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+        {filtered.map((img, idx) => (
+          <div key={img.id} className="anim-fade-up" style={{ animationDelay: `${Math.min(idx * 30, 200)}ms` }}>
+            <ImageCard
+              img={img}
+              isActive={img.id === props.activeImageId}
+              isExploration={props.isExploration}
+              busy={props.busy}
+              onShow={() => props.onShow(img.id)}
+              onHide={props.onHide}
+              onRename={(n) => props.onRename(img.id, n)}
+              onDelete={() => props.onDelete(img.id)}
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function UploadBox(props: { busy: boolean; onUpload: (file: File, name?: string) => void }) {
+  const [name, setName] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [drag, setDrag] = useState(false);
+
+  function reset() {
+    setName("");
+    setFile(null);
+  }
+
+  function submit() {
+    if (!file) return;
+    props.onUpload(file, name.trim() || undefined);
+    reset();
+  }
+
+  return (
+    <div className="glass rounded-2xl p-3 space-y-3">
+      <label
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDrag(true);
+        }}
+        onDragLeave={() => setDrag(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDrag(false);
+          const f = e.dataTransfer.files?.[0];
+          if (f && f.type.startsWith("image/")) setFile(f);
+        }}
+        className={`block border-2 border-dashed rounded-xl px-4 py-5 text-center cursor-pointer transition ${
+          drag
+            ? "border-amber-300/60 bg-amber-400/5"
+            : "border-white/15 hover:border-amber-300/40 hover:bg-white/5"
+        }`}
+      >
+        <input
+          type="file"
+          accept="image/*"
+          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          className="hidden"
+        />
+        {file ? (
+          <div className="space-y-1">
+            <div className="text-sm text-amber-100 font-serif truncate">{file.name}</div>
+            <div className="text-[11px] text-zinc-500">
+              {(file.size / 1024).toFixed(0)} КБ — тапни, чтобы заменить
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-1">
+            <div className="text-sm text-zinc-200">📷 Выбери или перетащи картинку</div>
+            <div className="text-[11px] text-zinc-500">PNG, JPG, WEBP, GIF, AVIF · до 15 МБ</div>
+          </div>
+        )}
+      </label>
+
+      {file && (
+        <div className="grid grid-cols-[1fr_auto] gap-2 anim-fade-in">
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Имя (необязательно)"
+            className={inputBase}
+          />
+          <button onClick={submit} disabled={props.busy} className={`${btnGold} px-4 text-sm font-bold`}>
+            Загрузить
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ImageCard(props: {
+  img: SceneImage;
+  isActive: boolean;
+  isExploration: boolean;
+  busy: boolean;
+  onShow: () => void;
+  onHide: () => void;
+  onRename: (name: string) => void;
+  onDelete: () => void;
+}) {
+  const { img } = props;
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(img.name);
+
+  useEffect(() => {
+    setName(img.name);
+  }, [img.name]);
+
+  return (
+    <div
+      className={[
+        "group relative rounded-2xl overflow-hidden border transition",
+        props.isActive
+          ? "border-amber-300/60 shadow-[0_0_0_2px_rgba(251,191,36,0.25)]"
+          : "border-white/10 hover:border-amber-300/30",
+      ].join(" ")}
+    >
+      <button
+        type="button"
+        onClick={props.isActive ? props.onHide : props.onShow}
+        disabled={props.busy}
+        className="block w-full aspect-[4/3] bg-black/40 relative"
+        title={props.isActive ? "Скрыть с экрана" : "Показать на экране"}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={img.path} alt={img.name} className="w-full h-full object-cover" />
+        {props.isActive && (
+          <span className="absolute top-1.5 left-1.5 text-[9px] uppercase tracking-widest px-1.5 py-0.5 rounded-md bg-amber-400/90 text-zinc-900 font-bold">
+            На экране
+          </span>
+        )}
+        {!props.isExploration && (
+          <span className="absolute inset-x-0 bottom-0 bg-black/60 text-[10px] uppercase tracking-widest text-zinc-400 py-1">
+            Включи «Исследование»
+          </span>
+        )}
+        {props.isExploration && !props.isActive && (
+          <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 bg-black/50 transition">
+            <span className="text-amber-100 text-sm font-serif font-bold">Показать</span>
+          </span>
+        )}
+      </button>
+
+      <div className="p-2 bg-black/30 flex items-center gap-2">
+        {editing ? (
+          <input
+            autoFocus
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onBlur={() => {
+              setEditing(false);
+              if (name.trim() && name.trim() !== img.name) props.onRename(name.trim());
+              else setName(img.name);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+              if (e.key === "Escape") {
+                setName(img.name);
+                setEditing(false);
+              }
+            }}
+            className="flex-1 min-w-0 bg-black/40 rounded-md border border-white/10 px-2 py-1 text-xs outline-none focus:border-amber-300/40"
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="flex-1 min-w-0 text-left text-xs text-zinc-200 truncate hover:text-amber-100"
+            title="Переименовать"
+          >
+            {img.name}
+          </button>
+        )}
+        <button
+          onClick={() => {
+            if (confirm(`Удалить «${img.name}»?`)) props.onDelete();
+          }}
+          className={`${btnGhost} w-7 h-7 text-rose-400 hover:text-rose-300 text-base leading-none`}
+          aria-label="Удалить"
+          title="Удалить"
+        >
+          ×
+        </button>
       </div>
     </div>
   );

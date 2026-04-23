@@ -21,7 +21,10 @@ export async function getCurrentEncounter() {
       },
     });
   }
-  return enc;
+  const activeImage = enc.activeImageId
+    ? await prisma.sceneImage.findUnique({ where: { id: enc.activeImageId } })
+    : null;
+  return { ...enc, activeImage };
 }
 
 export type EncounterPayload = Awaited<ReturnType<typeof getCurrentEncounter>>;

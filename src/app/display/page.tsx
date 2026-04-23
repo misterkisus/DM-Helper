@@ -6,6 +6,12 @@ export const dynamic = "force-dynamic";
 
 export default async function DisplayPage() {
   const enc = await getCurrentEncounter();
+  const mode = enc.displayMode === "exploration" ? "exploration" : "scene";
+
+  if (mode === "exploration") {
+    return <ExplorationView image={enc.activeImage} />;
+  }
+
   const active = enc.combatants.find((c) => c.id === enc.activeId);
   const activeIdx = active ? enc.combatants.findIndex((c) => c.id === active.id) : -1;
   const next =
@@ -214,6 +220,35 @@ export default async function DisplayPage() {
         </ul>
       )}
 
+    </div>
+  );
+}
+
+function ExplorationView(props: { image: { name: string; path: string } | null }) {
+  return (
+    <div className="min-h-screen w-full flex flex-col items-center justify-center bg-black text-zinc-100 relative">
+      <LiveRefresher />
+      {props.image ? (
+        <figure className="anim-fade-in w-full h-screen flex items-center justify-center">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            key={props.image.path}
+            src={props.image.path}
+            alt={props.image.name}
+            className="max-w-full max-h-full object-contain"
+          />
+          <figcaption className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full glass text-sm text-amber-100 font-serif">
+            {props.image.name}
+          </figcaption>
+        </figure>
+      ) : (
+        <div className="text-center anim-fade-in px-6">
+          <div className="font-serif text-zinc-500 italic" style={{ fontSize: "clamp(1.3rem, 3vw, 2rem)" }}>
+            Мастер готовит сцену...
+          </div>
+          <div className="mt-2 text-sm text-zinc-600">Режим исследования</div>
+        </div>
+      )}
     </div>
   );
 }

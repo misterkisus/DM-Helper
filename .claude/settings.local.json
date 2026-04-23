@@ -26,7 +26,9 @@
       "Bash(curl -s http://localhost:3737/display)",
       "Bash(curl -s -i -m 2 http://localhost:3737/api/events)",
       "Bash(curl -s -b /tmp/cj.txt -X POST -H \"content-type: application/json\" -d '{\"type\":\"clear\"}' http://localhost:3737/api/encounter/control)",
-      "Bash(curl -s -b /tmp/cj.txt -X DELETE http://localhost:3737/api/characters/cmoa7ceq90001vp68uajw1vn6)"
+      "Bash(curl -s -b /tmp/cj.txt -X DELETE http://localhost:3737/api/characters/cmoa7ceq90001vp68uajw1vn6)",
+      "Bash(tasklist)",
+      "Bash(xargs grep *)"
     ]
   }
 }

@@ -18,15 +18,27 @@ model Character {
 }
 
 model Encounter {
-  id          String      @id @default(cuid())
-  name        String      @default("Бой")
-  round       Int         @default(1)
-  activeId    String?
-  status      String      @default("idle") // idle | running | finished
-  isCurrent   Boolean     @default(false)
-  publishedAt DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  combatants  Combatant[]
+  id            String      @id @default(cuid())
+  name          String      @default("Бой")
+  round         Int         @default(1)
+  activeId      String?
+  status        String      @default("idle") // idle | running | finished
+  isCurrent     Boolean     @default(false)
+  displayMode   String      @default("scene") // scene | exploration
+  activeImageId String?
+  publishedAt   DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  combatants    Combatant[]
+}
+
+model SceneImage {
+  id        String   @id @default(cuid())
+  name      String
+  path      String
+  mimeType  String
+  width     Int?
+  height    Int?
+  createdAt DateTime @default(now())
 }
 
 model Combatant {

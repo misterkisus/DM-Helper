@@ -11,7 +11,9 @@ type Action =
   | { type: "reset-round" }
   | { type: "clear" }
   | { type: "set-active"; combatantId: string }
-  | { type: "rename"; name: string };
+  | { type: "rename"; name: string }
+  | { type: "set-mode"; mode: "scene" | "exploration" }
+  | { type: "set-image"; imageId: string | null };
 
 export async function POST(req: Request) {
   if (!(await isDm())) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -87,6 +89,25 @@ export async function POST(req: Request) {
       await prisma.encounter.update({
         where: { id: enc.id },
         data: { round: 1, activeId: null, status: "idle" },
+      });
+      break;
+    }
+    case "set-mode": {
+      if (action.mode !== "scene" && action.mode !== "exploration") break;
+      await prisma.encounter.update({
+        where: { id: enc.id },
+        data: { displayMode: action.mode, publishedAt: new Date() },
+      });
+      break;
+    }
+    case "set-image": {
+      if (action.imageId) {
+        const exists = await prisma.sceneImage.findUnique({ where: { id: action.imageId } });
+        if (!exists) break;
+      }
+      await prisma.encounter.update({
+        where: { id: enc.id },
+        data: { activeImageId: action.imageId, publishedAt: new Date() },
       });
       break;
     }
