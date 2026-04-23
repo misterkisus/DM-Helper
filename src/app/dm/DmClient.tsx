@@ -613,10 +613,6 @@ function FightTab(props: {
     if (!selectedStillExists) setSelectedId(active?.id ?? props.enc.combatants[0]?.id ?? null);
   }, [active?.id, props.enc.combatants, selectedId]);
 
-  function markDead(c: Combatant) {
-    if (confirm(`${c.displayName} умер? Убрать из очереди боя?`)) props.removeCombatant(c.id);
-  }
-
   return (
     <div className="px-3 sm:px-4 mt-4 space-y-2.5">
       <section className="battle-card glass-strong rounded-2xl overflow-hidden anim-fade-up">
@@ -651,13 +647,13 @@ function FightTab(props: {
                     setSelectedId(c.id);
                     props.onSetActive(c.id);
                   }}
-                  onDead={() => markDead(c)}
                 />
               ))}
               {wrappedFirst && (
                 <>
-                  <div className="flex items-center px-1 text-amber-200/60 text-xl" aria-hidden="true">
-                    ↻
+                  <div className="flex flex-col items-center justify-center px-2 self-center" aria-hidden="true">
+                    <span className="text-amber-200/70 text-3xl leading-none">↻</span>
+                    <span className="mt-0.5 text-[9px] uppercase tracking-widest text-zinc-500">круг</span>
                   </div>
                   <InitiativeToken
                     c={wrappedFirst}
@@ -669,7 +665,6 @@ function FightTab(props: {
                       setSelectedId(wrappedFirst.id);
                       props.onSetActive(wrappedFirst.id);
                     }}
-                    onDead={() => markDead(wrappedFirst)}
                   />
                 </>
               )}
@@ -724,82 +719,66 @@ function InitiativeToken(props: {
   isSelected: boolean;
   isWrapPreview?: boolean;
   onPick: () => void;
-  onDead: () => void;
 }) {
   const visibleConditions = props.c.conditions.slice(0, 3);
   const hiddenConditions = props.c.conditions.length - visibleConditions.length;
 
   return (
-    <div
+    <button
+      type="button"
+      onClick={props.onPick}
       className={[
-        "relative shrink-0 w-[4.75rem] sm:w-24",
-        props.isWrapPreview ? "opacity-45" : "",
+        "group relative shrink-0 w-[5.5rem] sm:w-[6.75rem] h-[8rem] sm:h-[10rem] rounded-xl overflow-hidden border text-left transition active:scale-[0.98]",
+        "bg-gradient-to-b from-black/55 to-black/25 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]",
+        props.isActive
+          ? "border-amber-200/80 ring-2 ring-amber-300/40 battle-card"
+          : props.isSelected
+            ? "border-amber-300/45"
+            : props.c.isPlayer
+              ? "border-emerald-400/25 hover:border-emerald-300/55"
+              : "border-rose-400/25 hover:border-rose-300/55",
+        props.isWrapPreview ? "opacity-40" : "",
       ].join(" ")}
+      title={props.isWrapPreview ? "Круг замкнулся" : "Сделать текущим ходом"}
     >
-      <button
-        type="button"
-        onClick={props.onPick}
+      <span
         className={[
-          "group w-full h-[6.1rem] sm:h-28 rounded-xl overflow-hidden border text-left transition active:scale-[0.98]",
-          "bg-gradient-to-b from-black/55 to-black/25 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]",
+          "absolute inset-x-0 top-0 h-1",
           props.isActive
-            ? "border-amber-200/80 ring-2 ring-amber-300/40 battle-card"
-            : props.isSelected
-              ? "border-amber-300/45"
-              : props.c.isPlayer
-                ? "border-emerald-400/25 hover:border-emerald-300/55"
-                : "border-rose-400/25 hover:border-rose-300/55",
+            ? "bg-gradient-to-r from-amber-200 via-amber-400 to-amber-600"
+            : props.c.isPlayer
+              ? "bg-emerald-400/70"
+              : "bg-rose-400/70",
         ].join(" ")}
-        title={props.isWrapPreview ? "Круг замкнулся" : "Сделать текущим ходом"}
-      >
-        <span
-          className={[
-            "absolute inset-x-1 top-1 h-1 rounded-full",
-            props.isActive
-              ? "bg-amber-300"
-              : props.c.isPlayer
-                ? "bg-emerald-400/70"
-                : "bg-rose-400/70",
-          ].join(" ")}
-        />
-        <span className="absolute left-1.5 top-2 z-10 px-1.5 py-0.5 rounded-md bg-black/70 border border-white/10 text-[10px] font-serif tabular-nums text-amber-100">
-          {props.c.initiative}
-        </span>
-        {props.isActive && (
-          <span className="absolute right-1.5 top-2 z-10 w-2.5 h-2.5 rounded-full bg-amber-300 shadow-[0_0_16px_rgba(251,191,36,0.9)]" />
-        )}
-        <PortraitBadge
-          src={props.c.portraitPath}
-          name={props.c.displayName}
-          className="absolute left-2 right-2 top-5 h-11 sm:h-14 rounded-lg"
-        />
-        <span className="absolute inset-x-1.5 bottom-1.5 z-10 min-w-0">
-          <span className="block truncate text-[10px] sm:text-xs font-serif text-zinc-100 leading-tight">
-            {props.c.displayName}
-          </span>
-          <span className="mt-1 flex items-center gap-1">
-            {visibleConditions.map((cond) => (
-              <span key={cond.id} className="w-1.5 h-1.5 rounded-full bg-amber-300/80" title={cond.slug} />
-            ))}
-            {hiddenConditions > 0 && <span className="text-[9px] text-zinc-400">+{hiddenConditions}</span>}
-            {props.isWrapPreview && <span className="ml-auto text-[9px] text-amber-200/70">круг</span>}
-          </span>
-        </span>
-      </button>
-      {!props.isWrapPreview && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            props.onDead();
-          }}
-          className="absolute -right-1 -top-1 z-20 rounded-full px-1.5 py-0.5 bg-rose-950/90 border border-rose-300/30 text-[9px] uppercase tracking-wider text-rose-200 opacity-75 hover:opacity-100 hover:bg-rose-800 transition"
-          title="Умер: убрать из очереди"
-        >
-          умер
-        </button>
+      />
+      <span className="absolute left-1.5 top-2 z-10 px-1.5 py-0.5 rounded-md bg-black/75 border border-white/10 text-[11px] font-serif tabular-nums text-amber-100">
+        {props.c.initiative}
+      </span>
+      {props.isActive && (
+        <span className="absolute right-1.5 top-2 z-10 w-2.5 h-2.5 rounded-full bg-amber-300 shadow-[0_0_16px_rgba(251,191,36,0.9)] animate-pulse" />
       )}
-    </div>
+      <PortraitBadge
+        src={props.c.portraitPath}
+        name={props.c.displayName}
+        className="absolute inset-x-0 top-0 h-[5.5rem] sm:h-[7rem] rounded-none"
+      />
+      <span className="absolute inset-x-0 bottom-0 z-10 px-1.5 pt-5 pb-1.5 bg-gradient-to-t from-black/95 via-black/80 to-transparent">
+        <span className="block truncate text-[11px] sm:text-[13px] font-serif text-zinc-50 leading-tight text-center">
+          {props.c.displayName}
+        </span>
+        <span className="mt-1 flex items-center justify-center gap-1">
+          {visibleConditions.map((cond) => (
+            <span key={cond.id} className="w-1.5 h-1.5 rounded-full bg-amber-300/80" title={cond.slug} />
+          ))}
+          {hiddenConditions > 0 && <span className="text-[9px] text-zinc-400">+{hiddenConditions}</span>}
+        </span>
+      </span>
+      {props.isWrapPreview && (
+        <span className="absolute left-1/2 -translate-x-1/2 -top-2 z-20 px-2 py-0.5 rounded-full bg-zinc-800 border border-amber-300/30 text-[9px] uppercase tracking-widest text-amber-200/80 whitespace-nowrap">
+          круг
+        </span>
+      )}
+    </button>
   );
 }
 
