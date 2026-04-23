@@ -24,21 +24,16 @@ function beltSignature(enc: EncounterPayload) {
   return `${enc.activeId ?? "idle"}|${enc.round}|${enc.combatants.map((c) => `${c.id}:${c.initiative}`).join(",")}`;
 }
 
-function queueFromActive(items: Combatant[], activeId: string | null) {
-  const idx = activeId ? items.findIndex((c) => c.id === activeId) : -1;
-  if (idx < 0) return items;
-  return [...items.slice(idx), ...items.slice(0, idx)];
-}
-
-function buildRepeatingBelt(queue: Combatant[], targetSlots: number): BeltEntry[] {
-  if (!queue.length) return [];
-  const items: BeltEntry[] = [];
-  const remainder = queue.length > 1 ? queue.slice(1) : [];
-  const nextRoundCycle = queue;
+function buildRepeatingBelt(orderedCombatants: Combatant[], activeId: string | null, targetSlots: number): BeltEntry[] {
+  if (!orderedCombatants.length) return [];
+  const entries: BeltEntry[] = [];
+  const activeIndex = activeId ? orderedCombatants.findIndex((c) => c.id === activeId) : -1;
+  const remainder = activeIndex >= 0 ? orderedCombatants.slice(activeIndex + 1) : orderedCombatants;
+  const nextRoundCycle = orderedCombatants;
   let tokenCount = 0;
 
   for (let i = 0; i < remainder.length && tokenCount < targetSlots; i += 1) {
-    items.push({
+    entries.push({
       type: "token",
       combatant: remainder[i],
       isWrapPreview: false,
@@ -47,14 +42,14 @@ function buildRepeatingBelt(queue: Combatant[], targetSlots: number): BeltEntry[
     tokenCount += 1;
   }
 
-  if (queue.length > 1 && tokenCount < targetSlots) {
-    items.push({ type: "divider", renderKey: "divider:next-round" });
+  if (orderedCombatants.length > 0 && tokenCount < targetSlots) {
+    entries.push({ type: "divider", renderKey: "divider:next-round" });
   }
 
   let cycleIndex = 0;
   while (tokenCount < targetSlots) {
     for (let i = 0; i < nextRoundCycle.length && tokenCount < targetSlots; i += 1) {
-      items.push({
+      entries.push({
         type: "token",
         combatant: nextRoundCycle[i],
         isWrapPreview: cycleIndex === 0 && i === 0,
@@ -65,7 +60,7 @@ function buildRepeatingBelt(queue: Combatant[], targetSlots: number): BeltEntry[
     cycleIndex += 1;
   }
 
-  return items;
+  return entries;
 }
 
 function Portrait(props: {
@@ -195,7 +190,7 @@ function QueueToken(props: {
       </div>
 
       {props.label && big && (
-        <div className="absolute left-1/2 -translate-x-1/2 -top-4 z-20 px-4 py-1 rounded-full bg-amber-400 text-[11px] sm:text-xs uppercase tracking-widest text-zinc-900 font-bold whitespace-nowrap shadow-[0_4px_16px_rgba(251,191,36,0.7)]">
+        <div className="absolute left-1/2 top-3 -translate-x-1/2 z-20 max-w-[calc(100%-5.5rem)] truncate px-4 py-1 rounded-full border border-amber-200/60 bg-amber-400 text-[11px] sm:text-xs uppercase tracking-widest text-zinc-900 font-bold whitespace-nowrap shadow-[0_4px_16px_rgba(251,191,36,0.7)]">
           {props.label}
         </div>
       )}
@@ -314,11 +309,14 @@ export default function DisplayClient(props: { initialEncounter: EncounterPayloa
     };
   }, []);
 
-  const queue = useMemo(() => queueFromActive(enc.combatants, enc.activeId), [enc.activeId, enc.combatants]);
-  const active = enc.activeId ? queue[0] ?? null : null;
+  const activeIndex = useMemo(
+    () => (enc.activeId ? enc.combatants.findIndex((c) => c.id === enc.activeId) : -1),
+    [enc.activeId, enc.combatants],
+  );
+  const active = activeIndex >= 0 ? enc.combatants[activeIndex] ?? null : null;
   const repeatedBelt = useMemo(
-    () => buildRepeatingBelt(queue, Math.max(22, queue.length * 5)),
-    [queue],
+    () => buildRepeatingBelt(enc.combatants, enc.activeId, Math.max(22, enc.combatants.length * 5)),
+    [enc.activeId, enc.combatants],
   );
 
   if (enc.displayMode === "exploration") {
