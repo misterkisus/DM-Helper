@@ -65,6 +65,9 @@ const inputBase =
   "w-full min-h-11 px-3 py-2.5 rounded-xl bg-black/30 border border-white/10 focus:border-amber-300/50 outline-none transition text-[15px] placeholder:text-zinc-600";
 
 async function readErrorMessage(res: Response, fallback: string) {
+  if (res.status === 413) {
+    return "Файл слишком большой для загрузки.\nЕсли это сервер, увеличь client_max_body_size в nginx.\nЯ уже стараюсь ужимать портреты перед отправкой, но слишком большие PNG всё равно могут упереться в лимит.";
+  }
   try {
     const data = (await res.json()) as { error?: string; code?: string; hint?: string };
     return [data.error || fallback, data.code ? `Код: ${data.code}` : "", data.hint || ""]
@@ -84,9 +87,79 @@ function initials(name: string) {
     .join("") || "?";
 }
 
+function replaceExt(name: string, ext: string) {
+  return name.replace(/\.[^.]+$/, "") + ext;
+}
+
+async function loadImageFile(file: File) {
+  return await new Promise<HTMLImageElement>((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(img);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Не удалось прочитать картинку"));
+    };
+    img.src = url;
+  });
+}
+
+async function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality?: number) {
+  return await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, type, quality));
+}
+
+async function optimizePortraitUpload(file: File) {
+  const targetBytes = 850 * 1024;
+  if (file.size <= targetBytes) return file;
+
+  try {
+    const image = await loadImageFile(file);
+    const variants = [
+      { maxSide: 1280, quality: 0.9 },
+      { maxSide: 1024, quality: 0.84 },
+      { maxSide: 896, quality: 0.78 },
+      { maxSide: 768, quality: 0.72 },
+      { maxSide: 640, quality: 0.66 },
+    ];
+
+    let best: File | null = null;
+
+    for (const variant of variants) {
+      const scale = Math.min(1, variant.maxSide / Math.max(image.naturalWidth, image.naturalHeight));
+      const width = Math.max(1, Math.round(image.naturalWidth * scale));
+      const height = Math.max(1, Math.round(image.naturalHeight * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) continue;
+      ctx.drawImage(image, 0, 0, width, height);
+
+      const blob = await canvasToBlob(canvas, "image/webp", variant.quality);
+      if (!blob) continue;
+
+      const candidate = new File([blob], replaceExt(file.name, ".webp"), {
+        type: "image/webp",
+        lastModified: Date.now(),
+      });
+
+      if (!best || candidate.size < best.size) best = candidate;
+      if (candidate.size <= targetBytes) return candidate;
+    }
+
+    return best ?? file;
+  } catch {
+    return file;
+  }
+}
+
 async function uploadPortraitFile(file: File) {
+  const uploadFile = await optimizePortraitUpload(file);
   const fd = new FormData();
-  fd.append("file", file);
+  fd.append("file", uploadFile);
   const res = await fetch("/api/uploads", { method: "POST", body: fd });
   if (!res.ok) throw new Error(await readErrorMessage(res, "Не удалось загрузить портрет"));
   const data = (await res.json()) as { path?: string };
@@ -605,6 +678,7 @@ function FightTab(props: {
   const queue = queueFromActive(props.enc.combatants, props.enc.activeId);
   const next = queue.length > 1 ? queue[1] : queue[0] ?? null;
   const wrappedFirst = queue.length > 1 ? queue[0] : null;
+  const monsterQueue = queue.filter((c) => !c.isPlayer);
   const [selectedId, setSelectedId] = useState<string | null>(active?.id ?? props.enc.combatants[0]?.id ?? null);
   const selected = props.enc.combatants.find((c) => c.id === selectedId) ?? active ?? props.enc.combatants[0] ?? null;
 
@@ -634,8 +708,8 @@ function FightTab(props: {
         </div>
 
         {queue.length > 0 && (
-          <div className="border-y border-white/10 bg-black/25 overflow-x-auto">
-            <div className="flex items-stretch gap-2 p-2 min-w-max">
+          <div className="border-y border-white/10 bg-black/25 overflow-x-auto initiative-belt">
+            <div key={`${props.enc.activeId ?? "idle"}:${props.enc.combatants.length}`} className="flex items-stretch gap-2 p-2 min-w-max anim-initiative-shift">
               {queue.map((c, idx) => (
                 <InitiativeToken
                   key={c.id}
@@ -651,9 +725,9 @@ function FightTab(props: {
               ))}
               {wrappedFirst && (
                 <>
-                  <div className="flex flex-col items-center justify-center px-2 self-center" aria-hidden="true">
-                    <span className="text-amber-200/70 text-3xl leading-none">↻</span>
-                    <span className="mt-0.5 text-[9px] uppercase tracking-widest text-zinc-500">круг</span>
+                  <div className="flex flex-col items-center justify-center px-1.5 self-center anim-initiative-shift" aria-hidden="true">
+                    <span className="text-amber-200/70 text-2xl leading-none">↻</span>
+                    <span className="mt-0.5 text-[8px] uppercase tracking-widest text-zinc-500">круг</span>
                   </div>
                   <InitiativeToken
                     c={wrappedFirst}
@@ -677,6 +751,36 @@ function FightTab(props: {
           <span>после последнего ход снова вернется к первому</span>
         </div>
       </section>
+
+      {monsterQueue.length > 0 && (
+        <section className="glass rounded-2xl p-3 space-y-3 anim-fade-up">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <div className="text-[10px] uppercase tracking-[0.24em] text-zinc-500">HP монстров</div>
+              <div className="mt-1 text-sm text-zinc-300">Все монстры и их здоровье прямо на одном экране</div>
+            </div>
+            <div className="glass rounded-full px-3 py-1 text-xs text-zinc-400">
+              Монстров: <span className="text-rose-200 tabular-nums">{monsterQueue.length}</span>
+            </div>
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            {monsterQueue.map((monster, idx) => (
+              <MonsterHpCard
+                key={monster.id}
+                c={monster}
+                isActive={monster.id === props.enc.activeId}
+                isSelected={monster.id === selected?.id}
+                onPick={() => setSelectedId(monster.id)}
+                onSetActive={props.onSetActive}
+                onUpdate={props.updateCombatant}
+                onRemove={props.removeCombatant}
+                animationDelay={Math.min(idx * 35, 240)}
+              />
+            ))}
+          </div>
+        </section>
+      )}
 
       {props.enc.combatants.length === 0 && (
         <div className="glass rounded-2xl p-6 text-center text-zinc-500 anim-fade-in">
@@ -728,7 +832,7 @@ function InitiativeToken(props: {
       type="button"
       onClick={props.onPick}
       className={[
-        "group relative shrink-0 w-[5.5rem] sm:w-[6.75rem] h-[8rem] sm:h-[10rem] rounded-xl overflow-hidden border text-left transition active:scale-[0.98]",
+        "group relative shrink-0 w-[4.75rem] sm:w-[5.7rem] h-[7.2rem] sm:h-[8.7rem] rounded-xl overflow-hidden border text-left transition active:scale-[0.98] anim-initiative-shift",
         "bg-gradient-to-b from-black/55 to-black/25 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]",
         props.isActive
           ? "border-amber-200/80 ring-2 ring-amber-300/40 battle-card"
@@ -760,10 +864,10 @@ function InitiativeToken(props: {
       <PortraitBadge
         src={props.c.portraitPath}
         name={props.c.displayName}
-        className="absolute inset-x-0 top-0 h-[5.5rem] sm:h-[7rem] rounded-none"
+        className="absolute inset-x-0 top-0 h-[4.75rem] sm:h-[5.9rem] rounded-none"
       />
       <span className="absolute inset-x-0 bottom-0 z-10 px-1.5 pt-5 pb-1.5 bg-gradient-to-t from-black/95 via-black/80 to-transparent">
-        <span className="block truncate text-[11px] sm:text-[13px] font-serif text-zinc-50 leading-tight text-center">
+        <span className="block truncate text-[10px] sm:text-[11px] font-serif text-zinc-50 leading-tight text-center">
           {props.c.displayName}
         </span>
         <span className="mt-1 flex items-center justify-center gap-1">
@@ -779,6 +883,95 @@ function InitiativeToken(props: {
         </span>
       )}
     </button>
+  );
+}
+
+function MonsterHpCard(props: {
+  c: Combatant;
+  isActive: boolean;
+  isSelected: boolean;
+  onPick: () => void;
+  onSetActive: (id: string) => void;
+  onUpdate: (id: string, patch: Partial<Combatant>) => void;
+  onRemove: (id: string) => void;
+  animationDelay?: number;
+}) {
+  const hpKnown = props.c.maxHp != null;
+
+  return (
+    <div
+      className={[
+        "relative rounded-2xl p-3 overflow-hidden transition anim-fade-up",
+        props.isSelected ? "battle-card glass-strong ring-1 ring-amber-300/30" : "glass",
+      ].join(" ")}
+      style={{ animationDelay: `${props.animationDelay ?? 0}ms` }}
+    >
+      <div
+        className={[
+          "absolute left-0 top-0 bottom-0 w-1",
+          props.isActive ? "bg-gradient-to-b from-amber-200 to-amber-500" : "bg-gradient-to-b from-rose-400/60 to-rose-800/60",
+        ].join(" ")}
+      />
+      <button type="button" onClick={props.onPick} className="w-full text-left">
+        <div className="flex items-center gap-3 min-w-0">
+          <PortraitBadge src={props.c.portraitPath} name={props.c.displayName} className="w-12 h-12" />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-serif text-base text-zinc-100 truncate">{props.c.displayName}</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-black/40 border border-white/10 text-amber-100 tabular-nums">
+                Иниц. {props.c.initiative}
+              </span>
+            </div>
+            <div className="mt-1 flex items-center gap-2 flex-wrap">
+              {props.isActive && (
+                <span className="text-[9px] uppercase tracking-widest px-1.5 py-0.5 rounded-md bg-amber-400/15 text-amber-100 border border-amber-300/40">
+                  ходит
+                </span>
+              )}
+              {props.c.hasActed && !props.isActive && (
+                <span className="text-[9px] uppercase tracking-widest px-1.5 py-0.5 rounded-md bg-white/5 text-zinc-500 border border-white/10">
+                  отыграл
+                </span>
+              )}
+              {props.isSelected && (
+                <span className="text-[9px] uppercase tracking-widest px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-200 border border-amber-300/20">
+                  выбран
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      </button>
+
+      <div className="mt-3">
+        {hpKnown ? (
+          <HpBlock
+            current={props.c.currentHp ?? 0}
+            max={props.c.maxHp ?? 0}
+            onChange={(currentHp) => props.onUpdate(props.c.id, { currentHp })}
+          />
+        ) : (
+          <div className="text-xs text-zinc-500 px-1">Для этого монстра HP еще не задан</div>
+        )}
+      </div>
+
+      <div className="mt-3 flex items-center gap-2">
+        <button
+          onClick={() => props.onSetActive(props.c.id)}
+          className={`${props.isActive ? btnGold : btnDark} px-3 py-2 text-xs font-bold`}
+        >
+          {props.isActive ? "Активен" : "Сделать ходом"}
+        </button>
+        <button
+          onClick={() => {
+            if (confirm(`${props.c.displayName} умер? Убрать из очереди боя?`)) props.onRemove(props.c.id);
+          }}
+          className={`${btnDanger} px-3 py-2 text-xs font-bold`}
+        >
+          Умер
+        </button>
+      </div>
+    </div>
   );
 }
 

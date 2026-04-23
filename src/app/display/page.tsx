@@ -106,26 +106,34 @@ export default async function DisplayPage() {
         </div>
       ) : (
         <div className="flex-1 flex items-center justify-center py-6">
-          <ul className="flex flex-wrap items-start justify-center gap-4 sm:gap-6 w-full max-w-[100rem]">
-            {active && <QueueToken c={active} isActive size="big" label="Ходит" />}
-            {rest.map((c) => (
-              <QueueToken key={c.id} c={c} isActive={false} />
-            ))}
-            {cycleStart && enc.combatants.length > 0 && (
-              <>
-                <li
-                  className="shrink-0 self-center flex flex-col items-center gap-2 px-2"
-                  aria-hidden="true"
-                >
-                  <span className="text-amber-200/80 text-5xl sm:text-6xl leading-none">↻</span>
-                  <span className="text-[10px] sm:text-xs uppercase tracking-widest text-zinc-500 whitespace-nowrap">
-                    следующий круг
-                  </span>
-                </li>
-                <QueueToken c={cycleStart} isActive={false} isWrapPreview />
-              </>
-            )}
-          </ul>
+          <div key={`${enc.activeId ?? "idle"}:${enc.round}:${enc.combatants.length}`} className="w-full max-w-[120rem] glass-strong rounded-[28px] overflow-hidden anim-initiative-shift">
+            <div className="flex items-center gap-3 lg:gap-4 p-3 lg:p-4">
+              {active && <QueueToken c={active} isActive size="big" label="Ходит" delayMs={0} />}
+
+              <div className="min-w-0 flex-1 overflow-hidden initiative-belt">
+                <ul className="flex items-center gap-3 lg:gap-4 min-w-max">
+                  {rest.map((c, idx) => (
+                    <QueueToken key={c.id} c={c} isActive={false} delayMs={Math.min((idx + 1) * 45, 280)} />
+                  ))}
+                  {cycleStart && enc.combatants.length > 1 && (
+                    <>
+                      <li
+                        className="shrink-0 self-center flex flex-col items-center gap-1 px-1.5 lg:px-2 anim-initiative-shift"
+                        style={{ animationDelay: `${Math.min((rest.length + 1) * 45, 320)}ms` }}
+                        aria-hidden="true"
+                      >
+                        <span className="text-amber-200/80 text-4xl lg:text-5xl leading-none">↻</span>
+                        <span className="text-[9px] lg:text-[10px] uppercase tracking-widest text-zinc-500 whitespace-nowrap">
+                          следующий круг
+                        </span>
+                      </li>
+                      <QueueToken c={cycleStart} isActive={false} isWrapPreview delayMs={Math.min((rest.length + 2) * 45, 360)} />
+                    </>
+                  )}
+                </ul>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -138,6 +146,7 @@ function QueueToken(props: {
   isWrapPreview?: boolean;
   label?: string;
   size?: "big" | "normal";
+  delayMs?: number;
 }) {
   const big = props.size === "big";
   const visibleConditions = props.c.conditions.slice(0, 4);
@@ -148,16 +157,17 @@ function QueueToken(props: {
     <li
       aria-current={props.isActive ? "step" : undefined}
       className={[
-        "relative shrink-0 rounded-2xl overflow-hidden border transition",
+        "relative shrink-0 rounded-2xl overflow-hidden border transition anim-initiative-shift",
         "bg-gradient-to-b from-black/60 to-black/30",
         big
-          ? "w-[13rem] sm:w-[16rem] lg:w-[19rem] h-[18rem] sm:h-[22rem] lg:h-[26rem] battle-card border-amber-200/70 ring-4 ring-amber-300/40 shadow-[0_0_80px_-10px_rgba(251,191,36,0.55)]"
+          ? "w-[10.5rem] sm:w-[12rem] lg:w-[13.5rem] h-[14rem] sm:h-[15.5rem] lg:h-[17rem] battle-card border-amber-200/70 ring-4 ring-amber-300/40 shadow-[0_0_80px_-10px_rgba(251,191,36,0.55)]"
           : [
-              "w-[8rem] sm:w-[10rem] lg:w-[12rem] h-[11.5rem] sm:h-[14rem] lg:h-[16.5rem]",
+              "w-[6.3rem] sm:w-[7.2rem] lg:w-[8rem] h-[8.6rem] sm:h-[9.6rem] lg:h-[10.5rem]",
               props.c.isPlayer ? "border-emerald-400/40" : "border-rose-400/40",
             ].join(" "),
         props.isWrapPreview ? "opacity-35" : "",
       ].join(" ")}
+      style={{ animationDelay: `${props.delayMs ?? 0}ms` }}
     >
       <div
         className={[
@@ -179,7 +189,7 @@ function QueueToken(props: {
         name={props.c.displayName}
         className={[
           "absolute inset-x-0",
-          big ? "top-0 bottom-[5.5rem] sm:bottom-[6.5rem]" : "top-0 bottom-[3.5rem] sm:bottom-[4rem]",
+          big ? "top-0 bottom-[4.75rem] sm:bottom-[5.2rem]" : "top-0 bottom-[2.8rem] sm:bottom-[3.15rem]",
         ].join(" ")}
       />
 
@@ -187,7 +197,7 @@ function QueueToken(props: {
         <div
           className={[
             "font-serif leading-tight text-center",
-            big ? "text-base sm:text-lg lg:text-xl text-amber-50 font-bold" : "text-sm sm:text-base text-zinc-100 font-semibold",
+            big ? "text-sm sm:text-base lg:text-lg text-amber-50 font-bold" : "text-[11px] sm:text-xs lg:text-sm text-zinc-100 font-semibold",
             "truncate",
           ].join(" ")}
         >
@@ -195,30 +205,30 @@ function QueueToken(props: {
         </div>
 
         {big ? (
-          <div className="mt-2 flex items-center justify-center gap-1.5 flex-wrap min-h-[1.25rem]">
-            {allConditions.slice(0, 5).map((cond) => {
+          <div className="mt-1.5 flex items-center justify-center gap-1 flex-wrap min-h-[1rem]">
+            {allConditions.slice(0, 4).map((cond) => {
               const def = CONDITION_BY_SLUG[cond.slug];
               return (
                 <span
                   key={cond.id}
                   title={def?.desc ?? ""}
-                  className="text-[10px] sm:text-xs px-2 py-0.5 rounded-full bg-amber-400/15 border border-amber-300/30 text-amber-100 truncate max-w-[7rem]"
+                  className="text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded-full bg-amber-400/15 border border-amber-300/30 text-amber-100 truncate max-w-[6rem]"
                 >
                   {formatCondition(cond.slug, cond.value)}
                 </span>
               );
             })}
-            {allConditions.length > 5 && (
-              <span className="text-[10px] sm:text-xs text-amber-200/70">+{allConditions.length - 5}</span>
+            {allConditions.length > 4 && (
+              <span className="text-[9px] sm:text-[10px] text-amber-200/70">+{allConditions.length - 4}</span>
             )}
           </div>
         ) : (
-          <div className="mt-1.5 flex items-center justify-center gap-1.5">
+          <div className="mt-1 flex items-center justify-center gap-1">
             {visibleConditions.map((cond) => (
               <span
                 key={cond.id}
                 title={CONDITION_BY_SLUG[cond.slug]?.ru ?? cond.slug}
-                className="w-2 h-2 rounded-full bg-amber-300/80"
+                className="w-1.5 h-1.5 rounded-full bg-amber-300/80"
               />
             ))}
             {hiddenConditions > 0 && (

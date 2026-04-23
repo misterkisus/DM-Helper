@@ -123,6 +123,7 @@ sudo tee /etc/nginx/sites-available/pf2e-helper > /dev/null <<'EOF'
 server {
     listen 80;
     server_name 45.114.61.202;
+    client_max_body_size 20M;
 
     # для certbot http-01
     location /.well-known/acme-challenge/ { root /var/www/html; }

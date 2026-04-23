@@ -199,19 +199,35 @@ select {
   60% { transform: scale(1.03); }
   100% { opacity: 1; transform: scale(1); }
 }
+@keyframes initiative-shift {
+  0% {
+    opacity: 0;
+    transform: translate3d(40px, 0, 0) scale(0.985);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
 
 .anim-fade-up { animation: fade-up 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 .anim-fade-in { animation: fade-in 0.4s ease both; }
 .anim-pop-in  { animation: pop-in 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 .anim-pulse-glow { animation: pulse-glow 2.8s ease-in-out infinite; }
+.anim-initiative-shift { animation: initiative-shift 0.55s cubic-bezier(0.18, 0.82, 0.22, 1) both; }
 .anim-shimmer {
   background: linear-gradient(90deg, transparent 0%, rgba(255,216,138,0.12) 50%, transparent 100%);
   background-size: 200% 100%;
   animation: shimmer 3s linear infinite;
 }
 
+.initiative-belt {
+  mask-image: linear-gradient(90deg, transparent, black 5%, black 95%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, black 5%, black 95%, transparent);
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .anim-fade-up, .anim-fade-in, .anim-pop-in, .anim-pulse-glow, .anim-shimmer,
+  .anim-fade-up, .anim-fade-in, .anim-pop-in, .anim-pulse-glow, .anim-shimmer, .anim-initiative-shift,
   body::after {
     animation: none !important;
   }
