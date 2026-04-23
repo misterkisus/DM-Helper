@@ -84,15 +84,17 @@ function Portrait(props: {
   return (
     <span
       className={[
-        "relative block overflow-hidden bg-gradient-to-br from-amber-300/15 to-rose-500/10 flex items-center justify-center font-serif font-bold text-amber-100/80",
+        "relative block overflow-hidden bg-gradient-to-br from-amber-300/15 to-rose-500/10 font-serif font-bold text-amber-100/80",
         props.className ?? "w-full h-full",
       ].join(" ")}
     >
       {props.src ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={props.src} alt={props.name} className={`w-full h-full ${imageClass}`} />
+        <img src={props.src} alt={props.name} className={`absolute inset-0 block w-full h-full ${imageClass}`} />
       ) : (
-        <span className="text-[clamp(1.5rem,4vw,3.5rem)] font-serif">{initials(props.name)}</span>
+        <span className="absolute inset-0 flex items-center justify-center text-[clamp(1.5rem,4vw,3.5rem)] font-serif">
+          {initials(props.name)}
+        </span>
       )}
     </span>
   );
@@ -145,8 +147,7 @@ function QueueToken(props: {
         name={props.c.displayName}
         fit={big ? "contain-top" : "cover"}
         className={[
-          "absolute inset-x-0",
-          big ? "top-0 bottom-[4.75rem] sm:bottom-[5.2rem]" : "top-0 bottom-[2.8rem] sm:bottom-[3.15rem]",
+          big ? "absolute inset-0" : "absolute inset-x-0 top-0 bottom-[2.8rem] sm:bottom-[3.15rem]",
         ].join(" ")}
       />
 
