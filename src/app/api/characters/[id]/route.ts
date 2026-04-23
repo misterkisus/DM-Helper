@@ -11,6 +11,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
     name?: string;
     isPlayer?: boolean;
     defaultInitMod?: number;
+    portraitPath?: string | null;
     notes?: string | null;
   };
   const updated = await prisma.character.update({
@@ -19,6 +20,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
       ...(body.name !== undefined ? { name: body.name.trim() } : {}),
       ...(body.isPlayer !== undefined ? { isPlayer: body.isPlayer } : {}),
       ...(body.defaultInitMod !== undefined ? { defaultInitMod: body.defaultInitMod } : {}),
+      ...(body.portraitPath !== undefined ? { portraitPath: body.portraitPath } : {}),
       ...(body.notes !== undefined ? { notes: body.notes } : {}),
     },
   });

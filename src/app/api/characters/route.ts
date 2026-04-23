@@ -14,6 +14,7 @@ export async function POST(req: Request) {
     name?: string;
     isPlayer?: boolean;
     defaultInitMod?: number;
+    portraitPath?: string | null;
     notes?: string | null;
   };
   if (!body.name?.trim()) return NextResponse.json({ error: "name required" }, { status: 400 });
@@ -22,6 +23,7 @@ export async function POST(req: Request) {
       name: body.name.trim(),
       isPlayer: body.isPlayer ?? true,
       defaultInitMod: body.defaultInitMod ?? 0,
+      portraitPath: body.portraitPath ?? null,
       notes: body.notes ?? null,
     },
   });

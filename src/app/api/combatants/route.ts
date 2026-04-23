@@ -12,36 +12,47 @@ export async function POST(req: Request) {
     isPlayer?: boolean;
     initiative?: number;
     maxHp?: number | null;
+    portraitPath?: string | null;
+    count?: number;
   };
 
   const enc = await getCurrentEncounter();
 
   let displayName = body.displayName?.trim() || "";
   let isPlayer = body.isPlayer ?? false;
+  let portraitPath = body.portraitPath ?? null;
   if (body.characterId) {
     const ch = await prisma.character.findUnique({ where: { id: body.characterId } });
     if (!ch) return NextResponse.json({ error: "character not found" }, { status: 404 });
     if (!displayName) displayName = ch.name;
     isPlayer = ch.isPlayer;
+    portraitPath = portraitPath ?? ch.portraitPath ?? null;
   }
   if (!displayName) return NextResponse.json({ error: "name required" }, { status: 400 });
+  const count = Math.max(1, Math.min(50, Math.floor(body.count ?? 1)));
 
   const last = await prisma.combatant.findFirst({
     where: { encounterId: enc.id },
     orderBy: { order: "desc" },
   });
-  const created = await prisma.combatant.create({
-    data: {
-      encounterId: enc.id,
-      characterId: body.characterId ?? null,
-      displayName,
-      isPlayer,
-      initiative: body.initiative ?? 0,
-      maxHp: body.maxHp ?? null,
-      currentHp: body.maxHp ?? null,
-      order: (last?.order ?? 0) + 1,
-    },
-  });
+  const baseOrder = last?.order ?? 0;
+  const created = await prisma.$transaction(
+    Array.from({ length: count }, (_, i) =>
+      prisma.combatant.create({
+        data: {
+          encounterId: enc.id,
+          characterId: body.characterId ?? null,
+          displayName: count > 1 ? `${displayName} ${i + 1}` : displayName,
+          isPlayer,
+          initiative: body.initiative ?? 0,
+          maxHp: body.maxHp ?? null,
+          currentHp: body.maxHp ?? null,
+          portraitPath,
+          order: baseOrder + i + 1,
+        },
+      }),
+    ),
+  );
   broadcast({ ts: Date.now() });
-  return NextResponse.json(created);
+  return NextResponse.json(count === 1 ? created[0] : created);
 }

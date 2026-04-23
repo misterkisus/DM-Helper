@@ -4,6 +4,33 @@ import LiveRefresher from "./LiveRefresher";
 
 export const dynamic = "force-dynamic";
 
+function initials(name: string) {
+  return name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "?";
+}
+
+function Portrait(props: { src?: string | null; name: string; className?: string }) {
+  return (
+    <span
+      className={[
+        "relative shrink-0 overflow-hidden rounded-2xl border border-amber-300/20 bg-gradient-to-br from-amber-300/20 to-rose-500/10 flex items-center justify-center font-serif font-bold text-amber-100 shadow-inner",
+        props.className ?? "w-14 h-14",
+      ].join(" ")}
+    >
+      {props.src ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={props.src} alt={props.name} className="w-full h-full object-cover" />
+      ) : (
+        <span>{initials(props.name)}</span>
+      )}
+    </span>
+  );
+}
+
 export default async function DisplayPage() {
   const enc = await getCurrentEncounter();
   const mode = enc.displayMode === "exploration" ? "exploration" : "scene";
@@ -55,23 +82,26 @@ export default async function DisplayPage() {
             <div className="text-[9px] sm:text-[10px] uppercase tracking-[0.3em] text-amber-200/70">
               Сейчас ходит
             </div>
-            <div className="mt-1.5 flex items-center gap-3 flex-wrap">
-              <h2
-                className="font-serif gold-text font-bold leading-none"
-                style={{ fontSize: "clamp(1.45rem, 4.4vw, 3.4rem)" }}
-              >
-                {active.displayName}
-              </h2>
-              <span
-                className={[
-                  "text-[9px] sm:text-[10px] uppercase tracking-widest px-2.5 py-0.5 rounded-full border",
-                  active.isPlayer
-                    ? "bg-emerald-500/10 border-emerald-400/30 text-emerald-100"
-                    : "bg-rose-500/10 border-rose-400/30 text-rose-100",
-                ].join(" ")}
-              >
-                {active.isPlayer ? "Игрок" : "Монстр"}
-              </span>
+            <div className="mt-1.5 flex items-center gap-3">
+              <Portrait src={active.portraitPath} name={active.displayName} className="w-14 h-14 sm:w-16 sm:h-16" />
+              <div className="min-w-0">
+                <h2
+                  className="font-serif gold-text font-bold leading-none truncate"
+                  style={{ fontSize: "clamp(1.45rem, 4.4vw, 3.4rem)" }}
+                >
+                  {active.displayName}
+                </h2>
+                <span
+                  className={[
+                    "mt-2 inline-flex text-[9px] sm:text-[10px] uppercase tracking-widest px-2.5 py-0.5 rounded-full border",
+                    active.isPlayer
+                      ? "bg-emerald-500/10 border-emerald-400/30 text-emerald-100"
+                      : "bg-rose-500/10 border-rose-400/30 text-rose-100",
+                  ].join(" ")}
+                >
+                  {active.isPlayer ? "Игрок" : "Монстр"}
+                </span>
+              </div>
             </div>
             <div className="mt-2 flex flex-wrap gap-1.5">
               <span className="glass rounded-full px-3 py-1 text-xs sm:text-sm text-zinc-300">
@@ -172,7 +202,8 @@ export default async function DisplayPage() {
                     </div>
                   </div>
 
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-0 flex-1 flex items-center gap-2">
+                    <Portrait src={c.portraitPath} name={c.displayName} className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl" />
                     <h2
                       className={[
                         "font-serif font-semibold leading-tight line-clamp-2",

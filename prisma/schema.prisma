@@ -12,6 +12,7 @@ model Character {
   name           String
   isPlayer       Boolean     @default(true)
   defaultInitMod Int         @default(0)
+  portraitPath   String?
   notes          String?
   createdAt      DateTime    @default(now())
   combatants     Combatant[]
@@ -51,6 +52,7 @@ model Combatant {
   tiebreaker  Int         @default(0)
   currentHp   Int?
   maxHp       Int?
+  portraitPath String?
   hasActed    Boolean     @default(false)
   order       Int         @default(0)
   conditions  Condition[]

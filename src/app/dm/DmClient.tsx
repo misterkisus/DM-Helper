@@ -16,6 +16,7 @@ type Combatant = {
   tiebreaker: number;
   currentHp: number | null;
   maxHp: number | null;
+  portraitPath: string | null;
   hasActed: boolean;
   order: number;
   conditions: Condition[];
@@ -35,6 +36,7 @@ type Character = {
   name: string;
   isPlayer: boolean;
   defaultInitMod: number;
+  portraitPath: string | null;
   notes: string | null;
 };
 type SceneImage = {
@@ -70,6 +72,86 @@ async function readErrorMessage(res: Response, fallback: string) {
   } catch {
     return fallback;
   }
+}
+
+function initials(name: string) {
+  return name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "?";
+}
+
+async function uploadPortraitFile(file: File) {
+  const fd = new FormData();
+  fd.append("file", file);
+  const res = await fetch("/api/uploads", { method: "POST", body: fd });
+  if (!res.ok) throw new Error(await readErrorMessage(res, "Не удалось загрузить портрет"));
+  const data = (await res.json()) as { path?: string };
+  if (!data.path) throw new Error("Сервер не вернул путь к портрету");
+  return data.path;
+}
+
+function PortraitBadge(props: { src?: string | null; name: string; className?: string }) {
+  return (
+    <span
+      className={[
+        "relative shrink-0 overflow-hidden rounded-xl border border-amber-300/20 bg-gradient-to-br from-amber-300/20 to-rose-500/10 flex items-center justify-center font-serif font-bold text-amber-100 shadow-inner",
+        props.className ?? "w-12 h-12",
+      ].join(" ")}
+    >
+      {props.src ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={props.src} alt={props.name} className="w-full h-full object-cover" />
+      ) : (
+        <span>{initials(props.name)}</span>
+      )}
+    </span>
+  );
+}
+
+function PortraitUpload(props: {
+  label: string;
+  src?: string | null;
+  name: string;
+  onUpload: (file: File) => Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
+
+  async function upload(file?: File) {
+    if (!file) return;
+    setBusy(true);
+    try {
+      await props.onUpload(file);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Не удалось загрузить портрет");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <label className="glass rounded-2xl p-2.5 flex items-center gap-3 cursor-pointer hover:border-amber-300/30 transition">
+      <input
+        type="file"
+        accept="image/*"
+        className="hidden"
+        disabled={busy}
+        onChange={(e) => {
+          void upload(e.target.files?.[0]);
+          e.currentTarget.value = "";
+        }}
+      />
+      <PortraitBadge src={props.src} name={props.name} className="w-12 h-12" />
+      <span className="min-w-0 flex-1">
+        <span className="block text-[10px] uppercase tracking-[0.2em] text-zinc-500">{props.label}</span>
+        <span className="block mt-0.5 text-sm text-zinc-200 truncate">
+          {busy ? "Загружаю..." : props.src ? "Нажми, чтобы заменить" : "Нажми, чтобы добавить"}
+        </span>
+      </span>
+    </label>
+  );
 }
 
 // ===================== root =====================
@@ -283,7 +365,7 @@ export default function DmClient(props: {
             onClick={() => setTab("library")}
             className={`relative z-10 py-2.5 text-xs sm:text-sm font-semibold transition ${tab === "library" ? "text-zinc-900" : "text-zinc-300"}`}
           >
-            Игроки · {chars.length}
+            База · {chars.length}
           </button>
           <button
             onClick={() => setTab("skills")}
@@ -317,20 +399,39 @@ export default function DmClient(props: {
                 }),
               )
             }
-            onAddMonster={(name, initiative, maxHp) =>
-              mutate(() =>
-                fetch("/api/combatants", {
-                  method: "POST",
-                  headers: { "content-type": "application/json" },
-                  body: JSON.stringify({ displayName: name, isPlayer: false, initiative, maxHp }),
-                }),
-              )
-            }
+            onAddMonster={(data) => {
+              startTransition(async () => {
+                try {
+                  const portraitPath = data.portraitFile ? await uploadPortraitFile(data.portraitFile) : null;
+                  const res = await fetch("/api/combatants", {
+                    method: "POST",
+                    headers: { "content-type": "application/json" },
+                    body: JSON.stringify({
+                      displayName: data.name,
+                      isPlayer: false,
+                      initiative: data.initiative,
+                      maxHp: data.maxHp,
+                      count: data.count,
+                      portraitPath,
+                    }),
+                  });
+                  if (!res.ok) {
+                    alert(await readErrorMessage(res, "Не удалось добавить монстров"));
+                    return;
+                  }
+                  await refresh();
+                  router.refresh();
+                } catch (error) {
+                  alert(error instanceof Error ? error.message : "Не удалось добавить монстров");
+                }
+              });
+            }}
             updateCombatant={updateCombatant}
             removeCombatant={removeCombatant}
             addCondition={addCondition}
             removeCondition={removeCondition}
             updateConditionValue={updateConditionValue}
+            uploadPortrait={uploadPortraitFile}
           />
         )}
         {tab === "library" && (
@@ -355,6 +456,7 @@ export default function DmClient(props: {
               )
             }
             onDelete={(id) => mutate(() => fetch(`/api/characters/${id}`, { method: "DELETE" }))}
+            uploadPortrait={uploadPortraitFile}
           />
         )}
         {tab === "skills" && (
@@ -478,12 +580,19 @@ function FightTab(props: {
   conditions: ConditionDef[];
   onSetActive: (id: string) => void;
   onAddCharacter: (id: string, initiative: number) => void;
-  onAddMonster: (name: string, initiative: number, maxHp?: number) => void;
+  onAddMonster: (data: {
+    name: string;
+    initiative: number;
+    maxHp?: number;
+    count: number;
+    portraitFile?: File | null;
+  }) => void;
   updateCombatant: (id: string, patch: Partial<Combatant>) => void;
   removeCombatant: (id: string) => void;
   addCondition: (combatantId: string, slug: string, value: number | null) => void;
   removeCondition: (id: string) => void;
   updateConditionValue: (id: string, value: number) => void;
+  uploadPortrait: (file: File) => Promise<string>;
 }) {
   const active = props.enc.combatants.find((c) => c.id === props.enc.activeId);
   const activeIdx = active ? props.enc.combatants.findIndex((c) => c.id === active.id) : -1;
@@ -528,6 +637,7 @@ function FightTab(props: {
             onAddCondition={props.addCondition}
             onRemoveCondition={props.removeCondition}
             onUpdateConditionValue={props.updateConditionValue}
+            uploadPortrait={props.uploadPortrait}
           />
         </div>
       ))}
@@ -552,6 +662,7 @@ function CombatantCard(props: {
   onAddCondition: (combatantId: string, slug: string, value: number | null) => void;
   onRemoveCondition: (id: string) => void;
   onUpdateConditionValue: (id: string, value: number) => void;
+  uploadPortrait: (file: File) => Promise<string>;
 }) {
   const { c } = props;
   const [open, setOpen] = useState(false);
@@ -576,7 +687,8 @@ function CombatantCard(props: {
         ].join(" ")}
       />
 
-      <div className="grid grid-cols-[auto_1fr] sm:flex sm:items-center gap-3 p-3 pl-4">
+      <div className="grid grid-cols-[auto_auto_1fr] sm:flex sm:items-center gap-3 p-3 pl-4">
+        <PortraitBadge src={c.portraitPath} name={c.displayName} className="w-14 h-14 sm:w-12 sm:h-12" />
         <NumberInput
           value={c.initiative}
           onChange={(v) => props.onUpdate(c.id, { initiative: v })}
@@ -617,7 +729,7 @@ function CombatantCard(props: {
           </div>
         </div>
 
-        <div className="col-span-2 sm:col-span-1 grid grid-cols-[1fr_auto] sm:flex gap-2">
+        <div className="col-span-3 sm:col-span-1 grid grid-cols-[1fr_auto] sm:flex gap-2">
           <button
             onClick={() => props.onSetActive(c.id)}
             className={`${props.isActive ? btnGold : btnDark} min-h-11 sm:min-h-0 px-3 py-2 text-xs font-bold`}
@@ -651,6 +763,15 @@ function CombatantCard(props: {
 
       {open && (
         <div className="border-t border-white/10 bg-black/20 p-4 space-y-3 anim-fade-in">
+          <PortraitUpload
+            label="Портрет в бою"
+            src={c.portraitPath}
+            name={c.displayName}
+            onUpload={async (file) => {
+              const portraitPath = await props.uploadPortrait(file);
+              props.onUpdate(c.id, { portraitPath });
+            }}
+          />
           <ConditionPicker defs={props.conditions} onPick={(slug, value) => props.onAddCondition(c.id, slug, value)} />
           <div className="flex items-center gap-3 text-sm">
             <label className="flex items-center gap-2 text-zinc-300">
@@ -804,13 +925,21 @@ function AddCombatant(props: {
   chars: Character[];
   encCombatants: Combatant[];
   onAddChar: (id: string, initiative: number) => void;
-  onAddMonster: (name: string, initiative: number, maxHp?: number) => void;
+  onAddMonster: (data: {
+    name: string;
+    initiative: number;
+    maxHp?: number;
+    count: number;
+    portraitFile?: File | null;
+  }) => void;
 }) {
   const [mode, setMode] = useState<"player" | "monster">("player");
   const [charId, setCharId] = useState("");
   const [init, setInit] = useState("");
   const [name, setName] = useState("");
   const [hp, setHp] = useState("");
+  const [count, setCount] = useState("1");
+  const [portraitFile, setPortraitFile] = useState<File | null>(null);
   const [open, setOpen] = useState(props.encCombatants.length === 0);
 
   const inFight = new Set(props.encCombatants.map((c) => c.characterId).filter(Boolean) as string[]);
@@ -891,7 +1020,7 @@ function AddCombatant(props: {
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-[1fr_1fr_auto] sm:grid-cols-[1fr_auto_auto_auto] gap-2">
+            <div className="grid grid-cols-[1fr_1fr_auto] sm:grid-cols-[1fr_auto_auto_auto_auto] gap-2">
               <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Имя" className={`${inputBase} min-h-12 col-span-3 sm:col-span-1`} />
               <input
                 value={hp}
@@ -907,15 +1036,32 @@ function AddCombatant(props: {
                 inputMode="numeric"
                 className={`${inputBase} min-h-12 text-center sm:w-20`}
               />
+              <input
+                value={count}
+                onChange={(e) => setCount(e.target.value.replace(/[^0-9]/g, ""))}
+                placeholder="шт."
+                inputMode="numeric"
+                title="Количество одинаковых монстров"
+                className={`${inputBase} min-h-12 text-center sm:w-16`}
+              />
               <button
                 onClick={() => {
                   if (!name.trim()) return;
                   const n = parseInt(init, 10);
                   const h = parseInt(hp, 10);
-                  props.onAddMonster(name.trim(), Number.isFinite(n) ? n : 0, Number.isFinite(h) ? h : undefined);
+                  const amount = Math.max(1, Math.min(50, parseInt(count, 10) || 1));
+                  props.onAddMonster({
+                    name: name.trim(),
+                    initiative: Number.isFinite(n) ? n : 0,
+                    maxHp: Number.isFinite(h) ? h : undefined,
+                    count: amount,
+                    portraitFile,
+                  });
                   setName("");
                   setInit("");
                   setHp("");
+                  setCount("1");
+                  setPortraitFile(null);
                 }}
                 disabled={!name.trim()}
                 className={`${btnEmerald} min-h-12 px-4 text-lg font-bold`}
@@ -923,6 +1069,21 @@ function AddCombatant(props: {
                 +
               </button>
             </div>
+          )}
+
+          {mode === "monster" && (
+            <label className="glass rounded-xl px-3 py-2 flex items-center gap-3 cursor-pointer hover:border-amber-300/30 transition">
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => setPortraitFile(e.target.files?.[0] ?? null)}
+              />
+              <PortraitBadge name={name || "Монстр"} className="w-10 h-10" />
+              <span className="min-w-0 text-sm text-zinc-300 truncate">
+                {portraitFile ? portraitFile.name : "Портрет для этих монстров (необязательно)"}
+              </span>
+            </label>
           )}
 
           {mode === "player" && available.length === 0 && (
@@ -946,9 +1107,10 @@ function AddCombatant(props: {
 
 function LibraryTab(props: {
   chars: Character[];
-  onCreate: (data: { name: string; isPlayer: boolean; defaultInitMod: number }) => void;
+  onCreate: (data: { name: string; isPlayer: boolean; defaultInitMod: number; portraitPath?: string | null }) => void;
   onUpdate: (id: string, data: Partial<Character>) => void;
   onDelete: (id: string) => void;
+  uploadPortrait: (file: File) => Promise<string>;
 }) {
   const [name, setName] = useState("");
   const [isPlayer, setIsPlayer] = useState(true);
@@ -993,23 +1155,43 @@ function LibraryTab(props: {
       {props.chars.length === 0 && (
         <div className="glass rounded-2xl p-6 text-center text-zinc-500 anim-fade-in">
           <div className="font-serif italic">Библиотека пуста</div>
-          <div className="text-xs mt-1">Добавь игроков — они сохранятся между боями</div>
+          <div className="text-xs mt-1">Добавь героев или монстров — они сохранятся между боями</div>
         </div>
       )}
 
       {props.chars.map((c, idx) => (
         <div key={c.id} className="anim-fade-up" style={{ animationDelay: `${Math.min(idx * 40, 300)}ms` }}>
-          <CharRow c={c} onUpdate={props.onUpdate} onDelete={props.onDelete} />
+          <CharRow c={c} onUpdate={props.onUpdate} onDelete={props.onDelete} uploadPortrait={props.uploadPortrait} />
         </div>
       ))}
     </div>
   );
 }
 
-function CharRow(props: { c: Character; onUpdate: (id: string, data: Partial<Character>) => void; onDelete: (id: string) => void }) {
+function CharRow(props: {
+  c: Character;
+  onUpdate: (id: string, data: Partial<Character>) => void;
+  onDelete: (id: string) => void;
+  uploadPortrait: (file: File) => Promise<string>;
+}) {
   const { c } = props;
+  const [uploading, setUploading] = useState(false);
+
+  async function upload(file?: File) {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const portraitPath = await props.uploadPortrait(file);
+      props.onUpdate(c.id, { portraitPath });
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Не удалось загрузить портрет");
+    } finally {
+      setUploading(false);
+    }
+  }
+
   return (
-    <div className="glass rounded-2xl p-3 grid grid-cols-[1fr_auto] sm:flex sm:items-center gap-2 relative overflow-hidden">
+    <div className="glass rounded-2xl p-3 grid grid-cols-[auto_1fr_auto] sm:flex sm:items-center gap-2 relative overflow-hidden">
       <div
         className={[
           "absolute left-0 top-0 bottom-0 w-1",
@@ -1018,6 +1200,20 @@ function CharRow(props: { c: Character; onUpdate: (id: string, data: Partial<Cha
             : "bg-gradient-to-b from-rose-400/60 to-rose-800/60",
         ].join(" ")}
       />
+      <label className="relative cursor-pointer" title={uploading ? "Загружаю..." : "Нажми, чтобы сменить портрет"}>
+        <input
+          type="file"
+          accept="image/*"
+          className="hidden"
+          disabled={uploading}
+          onChange={(e) => {
+            void upload(e.target.files?.[0]);
+            e.currentTarget.value = "";
+          }}
+        />
+        <PortraitBadge src={c.portraitPath} name={c.name} className="w-12 h-12" />
+        {uploading && <span className="absolute inset-0 rounded-xl bg-black/60 animate-pulse" />}
+      </label>
       <input
         value={c.name}
         onChange={(e) => props.onUpdate(c.id, { name: e.target.value })}

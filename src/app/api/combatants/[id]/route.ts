@@ -14,6 +14,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
     tiebreaker?: number;
     currentHp?: number | null;
     maxHp?: number | null;
+    portraitPath?: string | null;
     hasActed?: boolean;
   };
   const updated = await prisma.combatant.update({
@@ -24,6 +25,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
       ...(body.tiebreaker !== undefined ? { tiebreaker: body.tiebreaker } : {}),
       ...(body.currentHp !== undefined ? { currentHp: body.currentHp } : {}),
       ...(body.maxHp !== undefined ? { maxHp: body.maxHp } : {}),
+      ...(body.portraitPath !== undefined ? { portraitPath: body.portraitPath } : {}),
       ...(body.hasActed !== undefined ? { hasActed: body.hasActed } : {}),
     },
   });
