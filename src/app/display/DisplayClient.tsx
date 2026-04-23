@@ -132,9 +132,9 @@ function QueueToken(props: {
         ].join(" ")}
       />
 
-      <div className="absolute left-2 top-3 z-10 px-2 py-1 rounded-md bg-black/80 border border-white/10 text-sm sm:text-base font-serif tabular-nums text-amber-100 shadow-lg">
+      <span className="absolute left-2 top-3 z-10 inline-flex w-auto max-w-max items-center justify-center px-2 py-1 rounded-md bg-black/80 border border-white/10 text-sm sm:text-base leading-none font-serif tabular-nums text-amber-100 shadow-lg">
         {props.c.initiative}
-      </div>
+      </span>
 
       {props.isActive && (
         <div className="absolute right-2 top-3 z-10 w-3.5 h-3.5 rounded-full bg-amber-300 shadow-[0_0_24px_rgba(251,191,36,0.95)] animate-pulse" />
