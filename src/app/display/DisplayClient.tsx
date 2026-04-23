@@ -90,7 +90,7 @@ function Portrait(props: {
     >
       {props.src ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={props.src} alt={props.name} className={`absolute inset-0 block w-full h-full ${imageClass}`} />
+        <img src={props.src} alt={props.name} className={`block w-full h-full ${imageClass}`} />
       ) : (
         <span className="absolute inset-0 flex items-center justify-center text-[clamp(1.5rem,4vw,3.5rem)] font-serif">
           {initials(props.name)}
