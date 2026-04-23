@@ -5,6 +5,9 @@ import type { EncounterPayload } from "@/lib/encounter";
 import { formatCondition, CONDITION_BY_SLUG } from "@/lib/conditions";
 
 type Combatant = EncounterPayload["combatants"][number];
+type BeltEntry =
+  | { type: "token"; combatant: Combatant; isWrapPreview: boolean; renderKey: string }
+  | { type: "divider"; renderKey: string };
 
 function initials(name: string) {
   return (
@@ -27,18 +30,31 @@ function queueFromActive(items: Combatant[], activeId: string | null) {
   return [...items.slice(idx), ...items.slice(0, idx)];
 }
 
-function buildRepeatingBelt(queue: Combatant[], targetSlots: number) {
+function buildRepeatingBelt(queue: Combatant[], targetSlots: number): BeltEntry[] {
   if (!queue.length) return [];
   const cycle = queue.length > 1 ? [...queue.slice(1), queue[0]] : [queue[0]];
-  const items: Array<{ combatant: Combatant; isWrapPreview: boolean; renderKey: string }> = [];
+  const items: BeltEntry[] = [];
+  let tokenCount = 0;
+  let cycleIndex = 0;
 
-  for (let i = 0; i < targetSlots; i += 1) {
-    const combatant = cycle[i % cycle.length];
-    items.push({
-      combatant,
-      isWrapPreview: combatant.id === queue[0]?.id && i === cycle.length - 1,
-      renderKey: `${combatant.id}:${i}`,
-    });
+  while (tokenCount < targetSlots) {
+    for (let i = 0; i < cycle.length && tokenCount < targetSlots; i += 1) {
+      const combatant = cycle[i];
+      const isWrapPreview = combatant.id === queue[0]?.id;
+
+      if (isWrapPreview && tokenCount > 0) {
+        items.push({ type: "divider", renderKey: `divider:${cycleIndex}:${tokenCount}` });
+      }
+
+      items.push({
+        type: "token",
+        combatant,
+        isWrapPreview,
+        renderKey: `${combatant.id}:${cycleIndex}:${i}`,
+      });
+      tokenCount += 1;
+    }
+    cycleIndex += 1;
   }
 
   return items;
@@ -48,9 +64,14 @@ function Portrait(props: {
   src?: string | null;
   name: string;
   className?: string;
-  fit?: "cover" | "contain";
+  fit?: "cover" | "contain" | "contain-top";
 }) {
-  const imageClass = props.fit === "contain" ? "object-contain p-1.5 bg-black/70" : "object-cover";
+  const imageClass =
+    props.fit === "contain"
+      ? "object-contain object-center p-1.5 bg-black/70"
+      : props.fit === "contain-top"
+        ? "object-contain object-top px-1.5 pt-1.5 pb-0 bg-black/78"
+        : "object-cover object-center";
 
   return (
     <span
@@ -114,10 +135,10 @@ function QueueToken(props: {
       <Portrait
         src={props.c.portraitPath}
         name={props.c.displayName}
-        fit={big ? "contain" : "cover"}
+        fit={big ? "contain-top" : "cover"}
         className={[
           "absolute inset-x-0",
-          big ? "top-0 bottom-[4.75rem] sm:bottom-[5.2rem]" : "top-0 bottom-[2.8rem] sm:bottom-[3.15rem]",
+          big ? "top-[2.55rem] bottom-[4.75rem] sm:top-[2.7rem] sm:bottom-[5.2rem]" : "top-0 bottom-[2.8rem] sm:bottom-[3.15rem]",
         ].join(" ")}
       />
 
@@ -179,6 +200,16 @@ function QueueToken(props: {
   );
 }
 
+function RoundDivider() {
+  return (
+    <li className="shrink-0 flex items-center gap-2 px-1.5 lg:px-2 text-amber-200/70">
+      <span className="w-7 lg:w-9 h-px bg-gradient-to-r from-transparent via-amber-300/70 to-amber-300/25" />
+      <span className="text-[9px] lg:text-[10px] uppercase tracking-[0.24em] whitespace-nowrap">Новый раунд</span>
+      <span className="w-7 lg:w-9 h-px bg-gradient-to-r from-amber-300/25 via-amber-300/70 to-transparent" />
+    </li>
+  );
+}
+
 function ExplorationView(props: { image: { name: string; path: string } | null }) {
   return (
     <div className="min-h-screen w-full flex flex-col items-center justify-center bg-black text-zinc-100 relative">
@@ -213,7 +244,10 @@ function ExplorationView(props: { image: { name: string; path: string } | null }
 export default function DisplayClient(props: { initialEncounter: EncounterPayload }) {
   const [enc, setEnc] = useState(props.initialEncounter);
   const [beltKey, setBeltKey] = useState(0);
+  const [roundBanner, setRoundBanner] = useState<number | null>(null);
   const lastBeltSignature = useRef(beltSignature(props.initialEncounter));
+  const lastRound = useRef(props.initialEncounter.round);
+  const roundBannerTimer = useRef<number | null>(null);
 
   useEffect(() => {
     const es = new EventSource("/api/events");
@@ -240,6 +274,13 @@ export default function DisplayClient(props: { initialEncounter: EncounterPayloa
           setBeltKey((value) => value + 1);
         }
 
+        if (next.round !== lastRound.current) {
+          lastRound.current = next.round;
+          setRoundBanner(next.round);
+          if (roundBannerTimer.current) window.clearTimeout(roundBannerTimer.current);
+          roundBannerTimer.current = window.setTimeout(() => setRoundBanner(null), 2400);
+        }
+
         setEnc(next);
       } catch (error) {
         if (!(error instanceof DOMException && error.name === "AbortError")) {
@@ -259,6 +300,7 @@ export default function DisplayClient(props: { initialEncounter: EncounterPayloa
     return () => {
       disposed = true;
       currentRequest?.abort();
+      if (roundBannerTimer.current) window.clearTimeout(roundBannerTimer.current);
       es.close();
     };
   }, []);
@@ -324,7 +366,19 @@ export default function DisplayClient(props: { initialEncounter: EncounterPayloa
         </div>
       ) : (
         <div className="flex-1 flex items-center justify-center py-6">
-          <div className="w-full max-w-[120rem] glass-strong rounded-[28px] overflow-hidden">
+          <div className="relative w-full max-w-[120rem]">
+            {roundBanner !== null && (
+              <div key={roundBanner} className="pointer-events-none absolute left-1/2 -translate-x-1/2 -top-16 z-30 anim-round-banner">
+                <div className="glass-strong rounded-[22px] px-5 py-3 border border-amber-300/35 shadow-[0_14px_46px_-18px_rgba(251,191,36,0.65)]">
+                  <div className="text-[10px] uppercase tracking-[0.32em] text-amber-200/70 text-center">Раунд</div>
+                  <div className="mt-1 font-serif font-bold gold-text leading-none text-center text-3xl sm:text-4xl">
+                    {roundBanner}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="w-full glass-strong rounded-[28px] overflow-hidden">
             <div className="flex items-center gap-3 lg:gap-4 p-3 lg:p-4">
               {active && (
                 <div key={`${active.id}:${beltKey}`} className="shrink-0 anim-initiative-focus-shift initiative-track">
@@ -334,17 +388,22 @@ export default function DisplayClient(props: { initialEncounter: EncounterPayloa
 
               <div className="min-w-0 flex-1 overflow-hidden initiative-belt">
                 <ul key={beltKey} className="flex items-center gap-3 lg:gap-4 min-w-max anim-initiative-belt-slide initiative-track">
-                  {repeatedBelt.map((item, idx) => (
-                    <QueueToken
-                      key={`${item.renderKey}:${beltKey}`}
-                      c={item.combatant}
-                      isActive={false}
-                      isWrapPreview={item.isWrapPreview}
-                    />
-                  ))}
+                  {repeatedBelt.map((item) =>
+                    item.type === "divider" ? (
+                      <RoundDivider key={`${item.renderKey}:${beltKey}`} />
+                    ) : (
+                      <QueueToken
+                        key={`${item.renderKey}:${beltKey}`}
+                        c={item.combatant}
+                        isActive={false}
+                        isWrapPreview={item.isWrapPreview}
+                      />
+                    ),
+                  )}
                 </ul>
               </div>
             </div>
+          </div>
           </div>
         </div>
       )}

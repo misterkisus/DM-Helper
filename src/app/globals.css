@@ -229,6 +229,28 @@ select {
     transform: translate3d(0, 0, 0) scale(1);
   }
 }
+@keyframes round-banner {
+  0% {
+    opacity: 0;
+    transform: translate3d(-50%, -18px, 0) scale(0.96);
+    filter: blur(6px);
+  }
+  12% {
+    opacity: 1;
+    transform: translate3d(-50%, 0, 0) scale(1);
+    filter: blur(0);
+  }
+  78% {
+    opacity: 1;
+    transform: translate3d(-50%, 0, 0) scale(1);
+    filter: blur(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(-50%, -10px, 0) scale(1.02);
+    filter: blur(4px);
+  }
+}
 
 .anim-fade-up { animation: fade-up 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 .anim-fade-in { animation: fade-in 0.4s ease both; }
@@ -237,6 +259,7 @@ select {
 .anim-initiative-shift { animation: initiative-shift 0.55s cubic-bezier(0.18, 0.82, 0.22, 1) both; }
 .anim-initiative-belt-slide { animation: initiative-belt-slide 0.6s cubic-bezier(0.16, 0.84, 0.22, 1) both; }
 .anim-initiative-focus-shift { animation: initiative-focus-shift 0.48s cubic-bezier(0.16, 0.84, 0.22, 1) both; }
+.anim-round-banner { animation: round-banner 2.4s cubic-bezier(0.18, 0.82, 0.22, 1) both; }
 .anim-shimmer {
   background: linear-gradient(90deg, transparent 0%, rgba(255,216,138,0.12) 50%, transparent 100%);
   background-size: 200% 100%;
@@ -252,7 +275,7 @@ select {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .anim-fade-up, .anim-fade-in, .anim-pop-in, .anim-pulse-glow, .anim-shimmer, .anim-initiative-shift, .anim-initiative-belt-slide, .anim-initiative-focus-shift,
+  .anim-fade-up, .anim-fade-in, .anim-pop-in, .anim-pulse-glow, .anim-shimmer, .anim-initiative-shift, .anim-initiative-belt-slide, .anim-initiative-focus-shift, .anim-round-banner,
   body::after {
     animation: none !important;
   }
