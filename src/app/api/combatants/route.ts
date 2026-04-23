@@ -47,6 +47,7 @@ export async function POST(req: Request) {
           displayName: count > 1 ? `${displayName} ${i + 1}` : displayName,
           isPlayer,
           initiative: body.initiative ?? 0,
+          tiebreaker: isPlayer ? 0 : 1,
           maxHp,
           currentHp: maxHp,
           portraitPath,

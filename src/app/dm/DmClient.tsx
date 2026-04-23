@@ -470,12 +470,12 @@ export default function DmClient(props: {
             chars={chars}
             conditions={props.conditions}
             onSetActive={(id) => ctrl({ type: "set-active", combatantId: id })}
-            onAddFromLibrary={(characterId, initiative, count) =>
+            onAddFromLibrary={(characterId, initiative, count, maxHp) =>
               mutate(() =>
                 fetch("/api/combatants", {
                   method: "POST",
                   headers: { "content-type": "application/json" },
-                  body: JSON.stringify({ characterId, initiative, count }),
+                  body: JSON.stringify({ characterId, initiative, count, maxHp }),
                 }),
               )
             }
@@ -659,7 +659,7 @@ function FightTab(props: {
   chars: Character[];
   conditions: ConditionDef[];
   onSetActive: (id: string) => void;
-  onAddFromLibrary: (id: string, initiative: number, count: number) => void;
+  onAddFromLibrary: (id: string, initiative: number, count: number, maxHp?: number) => void;
   onAddMonster: (data: {
     name: string;
     initiative: number;
@@ -1135,10 +1135,10 @@ function HpBlock(props: { current: number; max: number; onChange: (n: number) =>
 
   function apply(sign: 1 | -1) {
     const n = parseInt(delta, 10);
-    if (!Number.isFinite(n)) return;
-    const next = Math.max(0, Math.min(props.max, props.current + sign * n));
+    const step = Number.isFinite(n) && n > 0 ? n : 1;
+    const next = Math.max(0, Math.min(props.max, props.current + sign * step));
     props.onChange(next);
-    setDelta("");
+    if (Number.isFinite(n)) setDelta("");
   }
 
   return (
@@ -1152,7 +1152,7 @@ function HpBlock(props: { current: number; max: number; onChange: (n: number) =>
       <input
         value={delta}
         onChange={(e) => setDelta(e.target.value.replace(/[^0-9]/g, ""))}
-        placeholder="±"
+        placeholder="шаг"
         className="w-10 h-6 px-1 rounded-md bg-black/40 border border-white/10 text-center outline-none focus:border-amber-300/40"
       />
       <button onClick={() => apply(-1)} className="w-6 h-6 rounded-md bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 active:scale-95 transition">
@@ -1253,7 +1253,7 @@ function ConditionPicker(props: { defs: ConditionDef[]; onPick: (slug: string, v
 function AddCombatant(props: {
   chars: Character[];
   encCombatants: Combatant[];
-  onAddFromLibrary: (id: string, initiative: number, count: number) => void;
+  onAddFromLibrary: (id: string, initiative: number, count: number, maxHp?: number) => void;
   onAddMonster: (data: {
     name: string;
     initiative: number;
@@ -1266,6 +1266,7 @@ function AddCombatant(props: {
   const [charId, setCharId] = useState("");
   const [init, setInit] = useState("");
   const [libraryCount, setLibraryCount] = useState("1");
+  const [libraryHp, setLibraryHp] = useState("");
   const [name, setName] = useState("");
   const [hp, setHp] = useState("");
   const [count, setCount] = useState("1");
@@ -1278,6 +1279,7 @@ function AddCombatant(props: {
   const available = [...availableHeroes, ...monsterPresets];
   const selected = available.find((c) => c.id === charId);
   const canAddManyFromLibrary = selected && !selected.isPlayer;
+  const libraryMonster = selected && !selected.isPlayer ? selected : null;
   const libraryAmount = canAddManyFromLibrary ? Math.max(1, Math.min(50, parseInt(libraryCount, 10) || 1)) : 1;
   const quickAmount = Math.max(1, Math.min(50, parseInt(count, 10) || 1));
 
@@ -1315,24 +1317,22 @@ function AddCombatant(props: {
           </div>
 
           {mode === "library" ? (
-            <div
-              className={[
-                "grid gap-2",
-                canAddManyFromLibrary
-                  ? "grid-cols-[1fr_1fr_auto] sm:grid-cols-[minmax(0,1fr)_5rem_4.5rem_auto]"
-                  : "grid-cols-[1fr_auto] sm:grid-cols-[minmax(0,1fr)_5rem_auto]",
-              ].join(" ")}
-            >
+            <div className="space-y-2">
               <select
                 value={charId}
                 onChange={(e) => {
                   setCharId(e.target.value);
                   const s = available.find((c) => c.id === e.target.value);
-                  if (s && !init) setInit(String(s.defaultInitMod));
-                  if (s?.isPlayer) setLibraryCount("1");
+                  if (s) setInit(String(s.defaultInitMod));
+                  if (s?.isPlayer) {
+                    setLibraryCount("1");
+                    setLibraryHp("");
+                  } else {
+                    setLibraryHp(s?.defaultHp != null ? String(s.defaultHp) : "");
+                  }
                 }}
                 disabled={available.length === 0}
-                className={`${inputBase} min-h-12 ${canAddManyFromLibrary ? "col-span-3" : "col-span-2"} sm:col-span-1`}
+                className={`${inputBase} min-h-12`}
               >
                 <option value="">— выбрать —</option>
                 {availableHeroes.length > 0 && (
@@ -1354,37 +1354,63 @@ function AddCombatant(props: {
                   </optgroup>
                 )}
               </select>
-              <input
-                value={init}
-                onChange={(e) => setInit(e.target.value.replace(/[^0-9-]/g, ""))}
-                placeholder="иниц."
-                inputMode="numeric"
-                className={`${inputBase} min-h-12 text-center`}
-              />
-              {canAddManyFromLibrary && (
+              <div
+                className={[
+                  "grid gap-2",
+                  libraryMonster
+                    ? "grid-cols-2 sm:grid-cols-[5.5rem_5.5rem_6.25rem_auto]"
+                    : "grid-cols-[1fr_auto] sm:grid-cols-[6rem_auto]",
+                ].join(" ")}
+              >
                 <input
-                  value={libraryCount}
-                  onChange={(e) => setLibraryCount(e.target.value.replace(/[^0-9]/g, ""))}
-                  placeholder="шт."
+                  value={init}
+                  onChange={(e) => setInit(e.target.value.replace(/[^0-9-]/g, ""))}
+                  placeholder="Иниц."
                   inputMode="numeric"
-                  title="Количество одинаковых монстров"
                   className={`${inputBase} min-h-12 text-center`}
                 />
-              )}
-              <button
-                onClick={() => {
-                  if (!charId) return;
-                  const n = parseInt(init, 10);
-                  props.onAddFromLibrary(charId, Number.isFinite(n) ? n : 0, libraryAmount);
-                  setCharId("");
-                  setInit("");
-                  setLibraryCount("1");
-                }}
-                disabled={!charId}
-                className={`${btnEmerald} min-h-12 px-4 text-sm font-bold`}
-              >
-                {canAddManyFromLibrary ? `+${libraryAmount}` : "+"}
-              </button>
+                {libraryMonster && (
+                  <input
+                    value={libraryHp}
+                    onChange={(e) => setLibraryHp(e.target.value.replace(/[^0-9]/g, ""))}
+                    placeholder="HP"
+                    inputMode="numeric"
+                    title="HP для этих монстров в текущем бою"
+                    className={`${inputBase} min-h-12 text-center`}
+                  />
+                )}
+                {libraryMonster && (
+                  <input
+                    value={libraryCount}
+                    onChange={(e) => setLibraryCount(e.target.value.replace(/[^0-9]/g, ""))}
+                    placeholder="Кол-во"
+                    inputMode="numeric"
+                    title="Количество одинаковых монстров"
+                    className={`${inputBase} min-h-12 text-center`}
+                  />
+                )}
+                <button
+                  onClick={() => {
+                    if (!charId) return;
+                    const n = parseInt(init, 10);
+                    const h = parseInt(libraryHp, 10);
+                    props.onAddFromLibrary(
+                      charId,
+                      Number.isFinite(n) ? n : 0,
+                      libraryAmount,
+                      libraryMonster && Number.isFinite(h) ? h : undefined,
+                    );
+                    setCharId("");
+                    setInit("");
+                    setLibraryCount("1");
+                    setLibraryHp("");
+                  }}
+                  disabled={!charId}
+                  className={`${btnEmerald} min-h-12 px-4 text-sm font-bold ${libraryMonster ? "col-span-2 sm:col-span-1" : ""}`}
+                >
+                  {canAddManyFromLibrary ? `+${libraryAmount}` : "+"}
+                </button>
+              </div>
             </div>
           ) : (
             <div className="grid grid-cols-[1fr_1fr_auto] sm:grid-cols-[1fr_auto_auto_auto_auto] gap-2">
@@ -1399,14 +1425,14 @@ function AddCombatant(props: {
               <input
                 value={init}
                 onChange={(e) => setInit(e.target.value.replace(/[^0-9-]/g, ""))}
-                placeholder="иниц."
+                placeholder="Иниц."
                 inputMode="numeric"
                 className={`${inputBase} min-h-12 text-center sm:w-20`}
               />
               <input
                 value={count}
                 onChange={(e) => setCount(e.target.value.replace(/[^0-9]/g, ""))}
-                placeholder="шт."
+                placeholder="Кол-во"
                 inputMode="numeric"
                 title="Количество одинаковых монстров"
                 className={`${inputBase} min-h-12 text-center sm:w-16`}
@@ -1472,7 +1498,7 @@ function AddCombatant(props: {
                   </span>
                   {!selected.isPlayer && selected.defaultHp != null && (
                     <span>
-                      HP: <span className="text-rose-200/80 font-semibold">{selected.defaultHp}</span>
+                      HP: <span className="text-rose-200/80 font-semibold">{libraryHp || selected.defaultHp}</span>
                     </span>
                   )}
                   {!selected.isPlayer && <span className="text-zinc-600">пачка с одной инициативой</span>}

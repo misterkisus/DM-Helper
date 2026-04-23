@@ -42,7 +42,7 @@ export async function DELETE(_req: Request, { params }: Ctx) {
       encounter: {
         include: {
           combatants: {
-            orderBy: [{ initiative: "desc" }, { tiebreaker: "desc" }, { order: "asc" }],
+            orderBy: [{ initiative: "desc" }, { isPlayer: "asc" }, { tiebreaker: "desc" }, { order: "asc" }],
           },
         },
       },

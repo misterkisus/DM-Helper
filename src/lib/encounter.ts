@@ -6,7 +6,7 @@ export async function getCurrentEncounter() {
     include: {
       combatants: {
         include: { conditions: true },
-        orderBy: [{ initiative: "desc" }, { tiebreaker: "desc" }, { order: "asc" }],
+        orderBy: [{ initiative: "desc" }, { isPlayer: "asc" }, { tiebreaker: "desc" }, { order: "asc" }],
       },
     },
   });
@@ -16,7 +16,7 @@ export async function getCurrentEncounter() {
       include: {
         combatants: {
           include: { conditions: true },
-          orderBy: [{ initiative: "desc" }, { tiebreaker: "desc" }, { order: "asc" }],
+          orderBy: [{ initiative: "desc" }, { isPlayer: "asc" }, { tiebreaker: "desc" }, { order: "asc" }],
         },
       },
     });
