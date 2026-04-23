@@ -36,7 +36,39 @@ export async function PATCH(req: Request, { params }: Ctx) {
 export async function DELETE(_req: Request, { params }: Ctx) {
   if (!(await isDm())) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const { id } = await params;
-  await prisma.combatant.delete({ where: { id } });
+  const target = await prisma.combatant.findUnique({
+    where: { id },
+    include: {
+      encounter: {
+        include: {
+          combatants: {
+            orderBy: [{ initiative: "desc" }, { tiebreaker: "desc" }, { order: "asc" }],
+          },
+        },
+      },
+    },
+  });
+  if (!target) return NextResponse.json({ ok: true });
+
+  const order = target.encounter.combatants;
+  const survivors = order.filter((c) => c.id !== id);
+  const currentIdx = order.findIndex((c) => c.id === id);
+  const nextActiveId =
+    target.encounter.activeId === id && survivors.length
+      ? survivors[Math.max(currentIdx, 0) % survivors.length]?.id ?? null
+      : target.encounter.activeId;
+
+  await prisma.$transaction([
+    prisma.combatant.delete({ where: { id } }),
+    prisma.encounter.update({
+      where: { id: target.encounterId },
+      data: {
+        activeId: nextActiveId,
+        status: survivors.length ? "running" : "idle",
+        publishedAt: new Date(),
+      },
+    }),
+  ]);
   broadcast({ ts: Date.now() });
   return NextResponse.json({ ok: true });
 }

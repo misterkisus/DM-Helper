@@ -12,6 +12,7 @@ model Character {
   name           String
   isPlayer       Boolean     @default(true)
   defaultInitMod Int         @default(0)
+  defaultHp      Int?
   portraitPath   String?
   notes          String?
   createdAt      DateTime    @default(now())

@@ -14,6 +14,7 @@ export async function POST(req: Request) {
     name?: string;
     isPlayer?: boolean;
     defaultInitMod?: number;
+    defaultHp?: number | null;
     portraitPath?: string | null;
     notes?: string | null;
   };
@@ -23,6 +24,7 @@ export async function POST(req: Request) {
       name: body.name.trim(),
       isPlayer: body.isPlayer ?? true,
       defaultInitMod: body.defaultInitMod ?? 0,
+      defaultHp: body.defaultHp ?? null,
       portraitPath: body.portraitPath ?? null,
       notes: body.notes ?? null,
     },

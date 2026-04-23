@@ -21,12 +21,14 @@ export async function POST(req: Request) {
   let displayName = body.displayName?.trim() || "";
   let isPlayer = body.isPlayer ?? false;
   let portraitPath = body.portraitPath ?? null;
+  let maxHp = body.maxHp ?? null;
   if (body.characterId) {
     const ch = await prisma.character.findUnique({ where: { id: body.characterId } });
     if (!ch) return NextResponse.json({ error: "character not found" }, { status: 404 });
     if (!displayName) displayName = ch.name;
     isPlayer = ch.isPlayer;
     portraitPath = portraitPath ?? ch.portraitPath ?? null;
+    maxHp = maxHp ?? ch.defaultHp ?? null;
   }
   if (!displayName) return NextResponse.json({ error: "name required" }, { status: 400 });
   const count = Math.max(1, Math.min(50, Math.floor(body.count ?? 1)));
@@ -45,8 +47,8 @@ export async function POST(req: Request) {
           displayName: count > 1 ? `${displayName} ${i + 1}` : displayName,
           isPlayer,
           initiative: body.initiative ?? 0,
-          maxHp: body.maxHp ?? null,
-          currentHp: body.maxHp ?? null,
+          maxHp,
+          currentHp: maxHp,
           portraitPath,
           order: baseOrder + i + 1,
         },

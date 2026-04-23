@@ -36,6 +36,7 @@ type Character = {
   name: string;
   isPlayer: boolean;
   defaultInitMod: number;
+  defaultHp: number | null;
   portraitPath: string | null;
   notes: string | null;
 };
@@ -154,6 +155,12 @@ function PortraitUpload(props: {
   );
 }
 
+function queueFromActive<T extends { id: string }>(items: T[], activeId?: string | null) {
+  const idx = activeId ? items.findIndex((item) => item.id === activeId) : -1;
+  if (idx < 0) return items;
+  return [...items.slice(idx), ...items.slice(0, idx)];
+}
+
 // ===================== root =====================
 
 export default function DmClient(props: {
@@ -238,10 +245,10 @@ export default function DmClient(props: {
     );
 
   return (
-    <div className="min-h-screen pb-36 sm:pb-14">
+    <div className={`min-h-screen ${isExploration ? "pb-6" : "pb-32 sm:pb-14"}`}>
       {/* ========================= HEADER ========================= */}
-      <header className="sticky top-0 z-20 glass-strong border-b border-white/10">
-        <div className="px-3 sm:px-4 py-3 max-w-3xl mx-auto space-y-3">
+      <header className="sticky top-0 z-20 bg-[#0e0a05]/92 backdrop-blur-md border-b border-white/10 shadow-[0_8px_24px_-12px_rgba(0,0,0,0.9)]">
+        <div className="px-3 sm:px-4 py-2.5 sm:py-3 max-w-3xl mx-auto space-y-2 sm:space-y-3">
           <div className="flex items-center gap-2">
             <input
               value={enc.name}
@@ -390,12 +397,12 @@ export default function DmClient(props: {
             chars={chars}
             conditions={props.conditions}
             onSetActive={(id) => ctrl({ type: "set-active", combatantId: id })}
-            onAddCharacter={(characterId, initiative) =>
+            onAddFromLibrary={(characterId, initiative, count) =>
               mutate(() =>
                 fetch("/api/combatants", {
                   method: "POST",
                   headers: { "content-type": "application/json" },
-                  body: JSON.stringify({ characterId, initiative }),
+                  body: JSON.stringify({ characterId, initiative, count }),
                 }),
               )
             }
@@ -506,8 +513,8 @@ export default function DmClient(props: {
       </div>
 
       {!isExploration && (
-      <div className="sm:hidden fixed inset-x-0 bottom-0 z-30 px-3 pt-5 safe-bottom bg-gradient-to-t from-[#090704] via-[#090704]/95 to-transparent">
-        <div className="glass-strong rounded-2xl p-2 shadow-[0_-14px_50px_-22px_rgba(0,0,0,0.9)]">
+      <div className="sm:hidden fixed inset-x-0 bottom-0 z-30 px-3 pt-4 safe-bottom bg-[#0e0a05]/95 backdrop-blur-md border-t border-white/10 shadow-[0_-10px_30px_-8px_rgba(0,0,0,0.95)]">
+        <div className="rounded-2xl p-2 bg-white/[0.04] border border-white/10">
           <div className="grid grid-cols-[1fr_1.35fr_0.85fr] gap-2">
             <button onClick={() => ctrl({ type: "prev" })} disabled={busy} className={`${btnDark} min-h-12 text-sm`}>
               Назад
@@ -579,7 +586,7 @@ function FightTab(props: {
   chars: Character[];
   conditions: ConditionDef[];
   onSetActive: (id: string) => void;
-  onAddCharacter: (id: string, initiative: number) => void;
+  onAddFromLibrary: (id: string, initiative: number, count: number) => void;
   onAddMonster: (data: {
     name: string;
     initiative: number;
@@ -595,26 +602,84 @@ function FightTab(props: {
   uploadPortrait: (file: File) => Promise<string>;
 }) {
   const active = props.enc.combatants.find((c) => c.id === props.enc.activeId);
-  const activeIdx = active ? props.enc.combatants.findIndex((c) => c.id === active.id) : -1;
-  const waitingCount =
-    activeIdx >= 0
-      ? props.enc.combatants.length - activeIdx - 1
-      : props.enc.combatants.filter((c) => !c.hasActed).length;
+  const queue = queueFromActive(props.enc.combatants, props.enc.activeId);
+  const next = queue.length > 1 ? queue[1] : queue[0] ?? null;
+  const wrappedFirst = queue.length > 1 ? queue[0] : null;
+  const [selectedId, setSelectedId] = useState<string | null>(active?.id ?? props.enc.combatants[0]?.id ?? null);
+  const selected = props.enc.combatants.find((c) => c.id === selectedId) ?? active ?? props.enc.combatants[0] ?? null;
+
+  useEffect(() => {
+    const selectedStillExists = selectedId ? props.enc.combatants.some((c) => c.id === selectedId) : false;
+    if (!selectedStillExists) setSelectedId(active?.id ?? props.enc.combatants[0]?.id ?? null);
+  }, [active?.id, props.enc.combatants, selectedId]);
+
+  function markDead(c: Combatant) {
+    if (confirm(`${c.displayName} умер? Убрать из очереди боя?`)) props.removeCombatant(c.id);
+  }
 
   return (
     <div className="px-3 sm:px-4 mt-4 space-y-2.5">
-      <section className="grid grid-cols-3 gap-2">
-        <div className="battle-card glass-strong rounded-2xl p-3 col-span-2">
-          <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">Сейчас ходит</div>
-          <div className="mt-1 font-serif text-xl font-semibold text-amber-50 truncate">
-            {active?.displayName ?? "не выбран"}
+      <section className="battle-card glass-strong rounded-2xl overflow-hidden anim-fade-up">
+        <div className="p-3 flex items-center justify-between gap-3 flex-wrap">
+          <div className="min-w-0">
+            <div className="text-[10px] uppercase tracking-[0.24em] text-zinc-500">Боевая очередь</div>
+            <div className="mt-1 font-serif text-xl text-amber-50 truncate">
+              {active ? active.displayName : props.enc.combatants.length ? "выбери текущего" : "пока пусто"}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-zinc-400">
+            <span className="glass rounded-full px-3 py-1">
+              Раунд <span className="gold-text font-semibold tabular-nums">{props.enc.round}</span>
+            </span>
+            <span className="glass rounded-full px-3 py-1">
+              Дальше <span className="text-amber-100">{next?.displayName ?? "никого"}</span>
+            </span>
           </div>
         </div>
-        <div className="glass rounded-2xl p-3">
-          <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">Далее</div>
-          <div className="mt-1 font-serif text-xl font-semibold gold-text tabular-nums">
-            {waitingCount}
+
+        {queue.length > 0 && (
+          <div className="border-y border-white/10 bg-black/25 overflow-x-auto">
+            <div className="flex items-stretch gap-2 p-2 min-w-max">
+              {queue.map((c, idx) => (
+                <InitiativeToken
+                  key={c.id}
+                  c={c}
+                  index={idx}
+                  isActive={c.id === props.enc.activeId}
+                  isSelected={c.id === selected?.id}
+                  onPick={() => {
+                    setSelectedId(c.id);
+                    props.onSetActive(c.id);
+                  }}
+                  onDead={() => markDead(c)}
+                />
+              ))}
+              {wrappedFirst && (
+                <>
+                  <div className="flex items-center px-1 text-amber-200/60 text-xl" aria-hidden="true">
+                    ↻
+                  </div>
+                  <InitiativeToken
+                    c={wrappedFirst}
+                    index={queue.length}
+                    isActive={false}
+                    isSelected={false}
+                    isWrapPreview
+                    onPick={() => {
+                      setSelectedId(wrappedFirst.id);
+                      props.onSetActive(wrappedFirst.id);
+                    }}
+                    onDead={() => markDead(wrappedFirst)}
+                  />
+                </>
+              )}
+            </div>
           </div>
+        )}
+
+        <div className="px-3 py-2 text-[11px] text-zinc-500 flex items-center gap-2 flex-wrap">
+          <span className="text-amber-200/70">↻ очередь зациклена</span>
+          <span>после последнего ход снова вернется к первому</span>
         </div>
       </section>
 
@@ -625,11 +690,11 @@ function FightTab(props: {
         </div>
       )}
 
-      {props.enc.combatants.map((c, idx) => (
-        <div key={c.id} className="anim-fade-up" style={{ animationDelay: `${Math.min(idx * 40, 300)}ms` }}>
+      {selected && (
+        <div className="anim-fade-up">
           <CombatantCard
-            c={c}
-            isActive={c.id === props.enc.activeId}
+            c={selected}
+            isActive={selected.id === props.enc.activeId}
             conditions={props.conditions}
             onSetActive={props.onSetActive}
             onUpdate={props.updateCombatant}
@@ -640,14 +705,100 @@ function FightTab(props: {
             uploadPortrait={props.uploadPortrait}
           />
         </div>
-      ))}
+      )}
 
       <AddCombatant
         chars={props.chars}
         encCombatants={props.enc.combatants}
-        onAddChar={props.onAddCharacter}
+        onAddFromLibrary={props.onAddFromLibrary}
         onAddMonster={props.onAddMonster}
       />
+    </div>
+  );
+}
+
+function InitiativeToken(props: {
+  c: Combatant;
+  index: number;
+  isActive: boolean;
+  isSelected: boolean;
+  isWrapPreview?: boolean;
+  onPick: () => void;
+  onDead: () => void;
+}) {
+  const visibleConditions = props.c.conditions.slice(0, 3);
+  const hiddenConditions = props.c.conditions.length - visibleConditions.length;
+
+  return (
+    <div
+      className={[
+        "relative shrink-0 w-[4.75rem] sm:w-24",
+        props.isWrapPreview ? "opacity-45" : "",
+      ].join(" ")}
+    >
+      <button
+        type="button"
+        onClick={props.onPick}
+        className={[
+          "group w-full h-[6.1rem] sm:h-28 rounded-xl overflow-hidden border text-left transition active:scale-[0.98]",
+          "bg-gradient-to-b from-black/55 to-black/25 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]",
+          props.isActive
+            ? "border-amber-200/80 ring-2 ring-amber-300/40 battle-card"
+            : props.isSelected
+              ? "border-amber-300/45"
+              : props.c.isPlayer
+                ? "border-emerald-400/25 hover:border-emerald-300/55"
+                : "border-rose-400/25 hover:border-rose-300/55",
+        ].join(" ")}
+        title={props.isWrapPreview ? "Круг замкнулся" : "Сделать текущим ходом"}
+      >
+        <span
+          className={[
+            "absolute inset-x-1 top-1 h-1 rounded-full",
+            props.isActive
+              ? "bg-amber-300"
+              : props.c.isPlayer
+                ? "bg-emerald-400/70"
+                : "bg-rose-400/70",
+          ].join(" ")}
+        />
+        <span className="absolute left-1.5 top-2 z-10 px-1.5 py-0.5 rounded-md bg-black/70 border border-white/10 text-[10px] font-serif tabular-nums text-amber-100">
+          {props.c.initiative}
+        </span>
+        {props.isActive && (
+          <span className="absolute right-1.5 top-2 z-10 w-2.5 h-2.5 rounded-full bg-amber-300 shadow-[0_0_16px_rgba(251,191,36,0.9)]" />
+        )}
+        <PortraitBadge
+          src={props.c.portraitPath}
+          name={props.c.displayName}
+          className="absolute left-2 right-2 top-5 h-11 sm:h-14 rounded-lg"
+        />
+        <span className="absolute inset-x-1.5 bottom-1.5 z-10 min-w-0">
+          <span className="block truncate text-[10px] sm:text-xs font-serif text-zinc-100 leading-tight">
+            {props.c.displayName}
+          </span>
+          <span className="mt-1 flex items-center gap-1">
+            {visibleConditions.map((cond) => (
+              <span key={cond.id} className="w-1.5 h-1.5 rounded-full bg-amber-300/80" title={cond.slug} />
+            ))}
+            {hiddenConditions > 0 && <span className="text-[9px] text-zinc-400">+{hiddenConditions}</span>}
+            {props.isWrapPreview && <span className="ml-auto text-[9px] text-amber-200/70">круг</span>}
+          </span>
+        </span>
+      </button>
+      {!props.isWrapPreview && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            props.onDead();
+          }}
+          className="absolute -right-1 -top-1 z-20 rounded-full px-1.5 py-0.5 bg-rose-950/90 border border-rose-300/30 text-[9px] uppercase tracking-wider text-rose-200 opacity-75 hover:opacity-100 hover:bg-rose-800 transition"
+          title="Умер: убрать из очереди"
+        >
+          умер
+        </button>
+      )}
     </div>
   );
 }
@@ -718,9 +869,6 @@ function CombatantCard(props: {
                 активен
               </span>
             )}
-            {c.maxHp != null && (
-              <HpBlock current={c.currentHp ?? 0} max={c.maxHp} onChange={(cur) => props.onUpdate(c.id, { currentHp: cur })} />
-            )}
             {c.hasActed && !props.isActive && (
               <span className="text-[9px] uppercase tracking-widest px-1.5 py-0.5 rounded-md bg-white/5 text-zinc-500 border border-white/10">
                 отыграл
@@ -729,13 +877,22 @@ function CombatantCard(props: {
           </div>
         </div>
 
-        <div className="col-span-3 sm:col-span-1 grid grid-cols-[1fr_auto] sm:flex gap-2">
+        <div className="col-span-3 sm:col-span-1 grid grid-cols-[1fr_auto_auto] sm:flex gap-2">
           <button
             onClick={() => props.onSetActive(c.id)}
             className={`${props.isActive ? btnGold : btnDark} min-h-11 sm:min-h-0 px-3 py-2 text-xs font-bold`}
             title="Сделать активным"
           >
             {props.isActive ? "Активен" : "Сделать ходом"}
+          </button>
+          <button
+            onClick={() => {
+              if (confirm(`${c.displayName} умер? Убрать из очереди боя?`)) props.onRemove(c.id);
+            }}
+            className={`${btnDanger} min-h-11 sm:min-h-0 px-3 py-2 text-xs font-bold`}
+            title="Убрать из очереди"
+          >
+            Умер
           </button>
           <button
             onClick={() => setOpen((o) => !o)}
@@ -786,11 +943,11 @@ function CombatantCard(props: {
             <div className="flex-1" />
             <button
               onClick={() => {
-                if (confirm(`Удалить ${c.displayName}?`)) props.onRemove(c.id);
+                if (confirm(`${c.displayName} умер? Убрать из очереди боя?`)) props.onRemove(c.id);
               }}
               className={`${btnDanger} px-3 py-1.5 text-xs`}
             >
-              Удалить
+              Умер
             </button>
           </div>
         </div>
@@ -924,7 +1081,7 @@ function ConditionPicker(props: { defs: ConditionDef[]; onPick: (slug: string, v
 function AddCombatant(props: {
   chars: Character[];
   encCombatants: Combatant[];
-  onAddChar: (id: string, initiative: number) => void;
+  onAddFromLibrary: (id: string, initiative: number, count: number) => void;
   onAddMonster: (data: {
     name: string;
     initiative: number;
@@ -933,9 +1090,10 @@ function AddCombatant(props: {
     portraitFile?: File | null;
   }) => void;
 }) {
-  const [mode, setMode] = useState<"player" | "monster">("player");
+  const [mode, setMode] = useState<"library" | "quick">("library");
   const [charId, setCharId] = useState("");
   const [init, setInit] = useState("");
+  const [libraryCount, setLibraryCount] = useState("1");
   const [name, setName] = useState("");
   const [hp, setHp] = useState("");
   const [count, setCount] = useState("1");
@@ -943,8 +1101,13 @@ function AddCombatant(props: {
   const [open, setOpen] = useState(props.encCombatants.length === 0);
 
   const inFight = new Set(props.encCombatants.map((c) => c.characterId).filter(Boolean) as string[]);
-  const available = props.chars.filter((c) => !inFight.has(c.id));
-  const selected = props.chars.find((c) => c.id === charId);
+  const availableHeroes = props.chars.filter((c) => c.isPlayer && !inFight.has(c.id));
+  const monsterPresets = props.chars.filter((c) => !c.isPlayer);
+  const available = [...availableHeroes, ...monsterPresets];
+  const selected = available.find((c) => c.id === charId);
+  const canAddManyFromLibrary = selected && !selected.isPlayer;
+  const libraryAmount = canAddManyFromLibrary ? Math.max(1, Math.min(50, parseInt(libraryCount, 10) || 1)) : 1;
+  const quickAmount = Math.max(1, Math.min(50, parseInt(count, 10) || 1));
 
   useEffect(() => {
     if (props.encCombatants.length === 0) setOpen(true);
@@ -960,7 +1123,7 @@ function AddCombatant(props: {
         <span>
           <span className="block text-[10px] uppercase tracking-[0.2em] text-zinc-500">Добавить в бой</span>
           <span className="block mt-1 font-serif text-lg text-amber-50">
-            {open ? "Выбери участника" : "Игрок или монстр"}
+            {open ? "Выбери из базы" : "Герой или монстр"}
           </span>
         </span>
         <span className={`${btnGold} w-10 h-10 text-xl`} aria-hidden="true">
@@ -971,52 +1134,84 @@ function AddCombatant(props: {
       {open && (
         <div className="space-y-3 anim-fade-in">
           <div className="grid grid-cols-2 gap-2">
-            <button onClick={() => setMode("player")} className={mode === "player" ? `${btnGold} min-h-11 text-sm` : `${btnDark} min-h-11 text-sm`}>
+            <button onClick={() => setMode("library")} className={mode === "library" ? `${btnGold} min-h-11 text-sm` : `${btnDark} min-h-11 text-sm`}>
               Из библиотеки
             </button>
-            <button onClick={() => setMode("monster")} className={mode === "monster" ? `${btnGold} min-h-11 text-sm` : `${btnDark} min-h-11 text-sm`}>
-              Монстр
+            <button onClick={() => setMode("quick")} className={mode === "quick" ? `${btnGold} min-h-11 text-sm` : `${btnDark} min-h-11 text-sm`}>
+              Быстрый монстр
             </button>
           </div>
 
-          {mode === "player" ? (
-            <div className="grid grid-cols-[1fr_auto] sm:grid-cols-[1fr_auto_auto] gap-2">
+          {mode === "library" ? (
+            <div
+              className={[
+                "grid gap-2",
+                canAddManyFromLibrary
+                  ? "grid-cols-[1fr_1fr_auto] sm:grid-cols-[minmax(0,1fr)_5rem_4.5rem_auto]"
+                  : "grid-cols-[1fr_auto] sm:grid-cols-[minmax(0,1fr)_5rem_auto]",
+              ].join(" ")}
+            >
               <select
                 value={charId}
                 onChange={(e) => {
                   setCharId(e.target.value);
-                  const s = props.chars.find((c) => c.id === e.target.value);
+                  const s = available.find((c) => c.id === e.target.value);
                   if (s && !init) setInit(String(s.defaultInitMod));
+                  if (s?.isPlayer) setLibraryCount("1");
                 }}
                 disabled={available.length === 0}
-                className={`${inputBase} min-h-12 col-span-2 sm:col-span-1`}
+                className={`${inputBase} min-h-12 ${canAddManyFromLibrary ? "col-span-3" : "col-span-2"} sm:col-span-1`}
               >
                 <option value="">— выбрать —</option>
-                {available.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} {c.isPlayer ? "" : "(моб)"}
-                  </option>
-                ))}
+                {availableHeroes.length > 0 && (
+                  <optgroup label="Герои">
+                    {availableHeroes.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                {monsterPresets.length > 0 && (
+                  <optgroup label="Монстры">
+                    {monsterPresets.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
               </select>
               <input
                 value={init}
                 onChange={(e) => setInit(e.target.value.replace(/[^0-9-]/g, ""))}
                 placeholder="иниц."
                 inputMode="numeric"
-                className={`${inputBase} min-h-12 w-20 text-center`}
+                className={`${inputBase} min-h-12 text-center`}
               />
+              {canAddManyFromLibrary && (
+                <input
+                  value={libraryCount}
+                  onChange={(e) => setLibraryCount(e.target.value.replace(/[^0-9]/g, ""))}
+                  placeholder="шт."
+                  inputMode="numeric"
+                  title="Количество одинаковых монстров"
+                  className={`${inputBase} min-h-12 text-center`}
+                />
+              )}
               <button
                 onClick={() => {
                   if (!charId) return;
                   const n = parseInt(init, 10);
-                  props.onAddChar(charId, Number.isFinite(n) ? n : 0);
+                  props.onAddFromLibrary(charId, Number.isFinite(n) ? n : 0, libraryAmount);
                   setCharId("");
                   setInit("");
+                  setLibraryCount("1");
                 }}
                 disabled={!charId}
-                className={`${btnEmerald} min-h-12 px-4 text-lg font-bold`}
+                className={`${btnEmerald} min-h-12 px-4 text-sm font-bold`}
               >
-                +
+                {canAddManyFromLibrary ? `+${libraryAmount}` : "+"}
               </button>
             </div>
           ) : (
@@ -1049,12 +1244,11 @@ function AddCombatant(props: {
                   if (!name.trim()) return;
                   const n = parseInt(init, 10);
                   const h = parseInt(hp, 10);
-                  const amount = Math.max(1, Math.min(50, parseInt(count, 10) || 1));
                   props.onAddMonster({
                     name: name.trim(),
                     initiative: Number.isFinite(n) ? n : 0,
                     maxHp: Number.isFinite(h) ? h : undefined,
-                    count: amount,
+                    count: quickAmount,
                     portraitFile,
                   });
                   setName("");
@@ -1064,14 +1258,14 @@ function AddCombatant(props: {
                   setPortraitFile(null);
                 }}
                 disabled={!name.trim()}
-                className={`${btnEmerald} min-h-12 px-4 text-lg font-bold`}
+                className={`${btnEmerald} min-h-12 px-4 text-sm font-bold`}
               >
-                +
+                {quickAmount > 1 ? `+${quickAmount}` : "+"}
               </button>
             </div>
           )}
 
-          {mode === "monster" && (
+          {mode === "quick" && (
             <label className="glass rounded-xl px-3 py-2 flex items-center gap-3 cursor-pointer hover:border-amber-300/30 transition">
               <input
                 type="file"
@@ -1081,20 +1275,37 @@ function AddCombatant(props: {
               />
               <PortraitBadge name={name || "Монстр"} className="w-10 h-10" />
               <span className="min-w-0 text-sm text-zinc-300 truncate">
-                {portraitFile ? portraitFile.name : "Портрет для этих монстров (необязательно)"}
+                {portraitFile ? portraitFile.name : "Портрет для этих монстров (не сохранится в базе)"}
               </span>
             </label>
           )}
 
-          {mode === "player" && available.length === 0 && (
+          {mode === "library" && available.length === 0 && (
             <div className="text-xs text-zinc-500 px-1">
-              Все персонажи из библиотеки уже добавлены в бой.
+              В базе пока нет доступных героев или монстров. Добавь их во вкладке «База».
             </div>
           )}
 
-          {mode === "player" && selected && (
-            <div className="text-xs text-zinc-500 px-1">
-              Бонус к инициативе: <span className="text-amber-200/80 font-semibold">{selected.defaultInitMod >= 0 ? `+${selected.defaultInitMod}` : selected.defaultInitMod}</span>
+          {mode === "library" && selected && (
+            <div className="glass rounded-xl px-3 py-2 flex items-center gap-3">
+              <PortraitBadge src={selected.portraitPath} name={selected.name} className="w-10 h-10" />
+              <div className="min-w-0 flex-1 text-xs text-zinc-400">
+                <div className="font-serif text-sm text-zinc-100 truncate">{selected.name}</div>
+                <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-1">
+                  <span>
+                    Иниц.:{" "}
+                    <span className="text-amber-200/80 font-semibold">
+                      {selected.defaultInitMod >= 0 ? `+${selected.defaultInitMod}` : selected.defaultInitMod}
+                    </span>
+                  </span>
+                  {!selected.isPlayer && selected.defaultHp != null && (
+                    <span>
+                      HP: <span className="text-rose-200/80 font-semibold">{selected.defaultHp}</span>
+                    </span>
+                  )}
+                  {!selected.isPlayer && <span className="text-zinc-600">пачка с одной инициативой</span>}
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -1107,59 +1318,136 @@ function AddCombatant(props: {
 
 function LibraryTab(props: {
   chars: Character[];
-  onCreate: (data: { name: string; isPlayer: boolean; defaultInitMod: number; portraitPath?: string | null }) => void;
+  onCreate: (data: {
+    name: string;
+    isPlayer: boolean;
+    defaultInitMod: number;
+    defaultHp?: number | null;
+    portraitPath?: string | null;
+  }) => void;
   onUpdate: (id: string, data: Partial<Character>) => void;
   onDelete: (id: string) => void;
   uploadPortrait: (file: File) => Promise<string>;
 }) {
+  const [kind, setKind] = useState<"heroes" | "monsters">("heroes");
   const [name, setName] = useState("");
-  const [isPlayer, setIsPlayer] = useState(true);
   const [mod, setMod] = useState("");
+  const [hp, setHp] = useState("");
+  const [portraitFile, setPortraitFile] = useState<File | null>(null);
+  const [creating, setCreating] = useState(false);
+  const filtered = props.chars.filter((c) => (kind === "heroes" ? c.isPlayer : !c.isPlayer));
+  const isPlayer = kind === "heroes";
+
+  async function createCharacter() {
+    if (!name.trim() || creating) return;
+    setCreating(true);
+    try {
+      const m = parseInt(mod, 10);
+      const h = parseInt(hp, 10);
+      const portraitPath = portraitFile ? await props.uploadPortrait(portraitFile) : null;
+      props.onCreate({
+        name: name.trim(),
+        isPlayer,
+        defaultInitMod: Number.isFinite(m) ? m : 0,
+        defaultHp: !isPlayer && Number.isFinite(h) ? h : null,
+        portraitPath,
+      });
+      setName("");
+      setMod("");
+      setHp("");
+      setPortraitFile(null);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Не удалось создать запись в базе");
+    } finally {
+      setCreating(false);
+    }
+  }
 
   return (
     <div className="px-3 sm:px-4 mt-4 space-y-2.5">
+      <div className="glass rounded-2xl p-1 grid grid-cols-2 relative">
+        <div
+          className="absolute top-1 bottom-1 w-1/2 rounded-xl bg-gradient-to-b from-amber-200 via-amber-300 to-amber-500 transition-transform duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] shadow-[0_4px_20px_-6px_rgba(232,193,112,0.5)]"
+          style={{ transform: kind === "heroes" ? "translateX(0%)" : "translateX(100%)" }}
+        />
+        <button
+          onClick={() => setKind("heroes")}
+          className={`relative z-10 py-2.5 text-sm font-semibold transition ${kind === "heroes" ? "text-zinc-900" : "text-zinc-300"}`}
+        >
+          Герои · {props.chars.filter((c) => c.isPlayer).length}
+        </button>
+        <button
+          onClick={() => setKind("monsters")}
+          className={`relative z-10 py-2.5 text-sm font-semibold transition ${kind === "monsters" ? "text-zinc-900" : "text-zinc-300"}`}
+        >
+          Монстры · {props.chars.filter((c) => !c.isPlayer).length}
+        </button>
+      </div>
+
       <div className="glass rounded-2xl p-3 space-y-3">
-        <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 px-1">Новый персонаж</div>
-        <div className="grid grid-cols-[1fr_auto] gap-2">
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Имя" className={inputBase} />
+        <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 px-1">
+          {isPlayer ? "Новый герой" : "Новый монстр"}
+        </div>
+        <div className="grid grid-cols-[1fr_auto] sm:grid-cols-[1fr_auto_auto] gap-2">
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder={isPlayer ? "Имя героя" : "Название монстра"}
+            className={inputBase}
+          />
           <input
             value={mod}
             onChange={(e) => setMod(e.target.value.replace(/[^0-9-]/g, ""))}
-            placeholder="мод."
+            placeholder="иниц."
             inputMode="numeric"
             className={`${inputBase} w-20 text-center`}
           />
+          {!isPlayer && (
+            <input
+              value={hp}
+              onChange={(e) => setHp(e.target.value.replace(/[^0-9]/g, ""))}
+              placeholder="HP"
+              inputMode="numeric"
+              className={`${inputBase} col-span-2 sm:col-span-1 sm:w-20 text-center`}
+            />
+          )}
         </div>
-        <div className="flex items-center gap-3">
-          <label className="flex items-center gap-2 text-sm text-zinc-300">
-            <input type="checkbox" checked={isPlayer} onChange={(e) => setIsPlayer(e.target.checked)} className="w-4 h-4 accent-amber-400" />
-            Игрок
-          </label>
-          <div className="flex-1" />
+        <label className="glass rounded-xl px-3 py-2 flex items-center gap-3 cursor-pointer hover:border-amber-300/30 transition">
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => setPortraitFile(e.target.files?.[0] ?? null)}
+          />
+          <PortraitBadge name={name || (isPlayer ? "Герой" : "Монстр")} className="w-10 h-10" />
+          <span className="min-w-0 text-sm text-zinc-300 truncate">
+            {portraitFile ? portraitFile.name : isPlayer ? "Портрет героя (можно добавить сразу)" : "Портрет монстра (можно добавить сразу)"}
+          </span>
+        </label>
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="text-xs text-zinc-500 min-w-0 flex-1">
+            {isPlayer
+              ? "Герои добавляются по одному."
+              : "Монстр сохранится в базе, а в бою его можно будет добавить пачкой с одной инициативой."}
+          </div>
           <button
-            onClick={() => {
-              if (!name.trim()) return;
-              const m = parseInt(mod, 10);
-              props.onCreate({ name: name.trim(), isPlayer, defaultInitMod: Number.isFinite(m) ? m : 0 });
-              setName("");
-              setMod("");
-            }}
-            disabled={!name.trim()}
+            onClick={() => void createCharacter()}
+            disabled={!name.trim() || creating}
             className={`${btnGold} px-4 py-2 text-sm`}
           >
-            Создать
+            {creating ? "Создаю..." : "Создать"}
           </button>
         </div>
       </div>
 
-      {props.chars.length === 0 && (
+      {filtered.length === 0 && (
         <div className="glass rounded-2xl p-6 text-center text-zinc-500 anim-fade-in">
-          <div className="font-serif italic">Библиотека пуста</div>
+          <div className="font-serif italic">{isPlayer ? "Героев пока нет" : "Монстров пока нет"}</div>
           <div className="text-xs mt-1">Добавь героев или монстров — они сохранятся между боями</div>
         </div>
       )}
 
-      {props.chars.map((c, idx) => (
+      {filtered.map((c, idx) => (
         <div key={c.id} className="anim-fade-up" style={{ animationDelay: `${Math.min(idx * 40, 300)}ms` }}>
           <CharRow c={c} onUpdate={props.onUpdate} onDelete={props.onDelete} uploadPortrait={props.uploadPortrait} />
         </div>
@@ -1191,7 +1479,7 @@ function CharRow(props: {
   }
 
   return (
-    <div className="glass rounded-2xl p-3 grid grid-cols-[auto_1fr_auto] sm:flex sm:items-center gap-2 relative overflow-hidden">
+    <div className="glass rounded-2xl p-3 flex flex-wrap sm:flex-nowrap items-center gap-3 relative overflow-hidden">
       <div
         className={[
           "absolute left-0 top-0 bottom-0 w-1",
@@ -1214,28 +1502,52 @@ function CharRow(props: {
         <PortraitBadge src={c.portraitPath} name={c.name} className="w-12 h-12" />
         {uploading && <span className="absolute inset-0 rounded-xl bg-black/60 animate-pulse" />}
       </label>
-      <input
-        value={c.name}
-        onChange={(e) => props.onUpdate(c.id, { name: e.target.value })}
-        className="min-w-0 sm:flex-1 bg-transparent font-serif text-base font-semibold outline-none border-b border-transparent focus:border-amber-300/30 pb-0.5 pl-2"
-      />
-      <label className="flex items-center justify-end gap-1 text-xs text-zinc-400">
-        <input type="checkbox" checked={c.isPlayer} onChange={(e) => props.onUpdate(c.id, { isPlayer: e.target.checked })} className="w-3.5 h-3.5 accent-amber-400" />
-        игрок
-      </label>
-      <div className="flex items-center gap-1">
-        <span className="text-[10px] text-zinc-500 uppercase">мод</span>
-        <NumberInput value={c.defaultInitMod} onChange={(v) => props.onUpdate(c.id, { defaultInitMod: v })} className="w-12 h-8 text-center text-sm tabular-nums" />
+      <div className="min-w-0 flex-1 basis-[calc(100%-4rem)] sm:basis-0">
+        <input
+          value={c.name}
+          onChange={(e) => props.onUpdate(c.id, { name: e.target.value })}
+          className="w-full bg-transparent font-serif text-base font-semibold outline-none border-b border-transparent focus:border-amber-300/30 pb-0.5"
+        />
+        <div className="mt-1 flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => props.onUpdate(c.id, { isPlayer: !c.isPlayer })}
+            className={[
+              "text-[10px] uppercase tracking-widest px-2 py-1 rounded-full border",
+              c.isPlayer
+                ? "bg-emerald-500/10 border-emerald-400/30 text-emerald-200"
+                : "bg-rose-500/10 border-rose-400/30 text-rose-200",
+            ].join(" ")}
+            title="Переключить тип"
+          >
+            {c.isPlayer ? "Герой" : "Монстр"}
+          </button>
+          <span className="text-[11px] text-zinc-600">
+            {c.portraitPath ? "портрет есть" : "нажми на квадрат, чтобы добавить портрет"}
+          </span>
+        </div>
       </div>
-      <button
-        onClick={() => {
-          if (confirm(`Удалить ${c.name}?`)) props.onDelete(c.id);
-        }}
-        className={`${btnGhost} w-8 h-8 text-rose-400 hover:text-rose-300`}
-        aria-label="Удалить"
-      >
-        ×
-      </button>
+      <div className="w-full sm:w-auto pl-14 sm:pl-0 flex items-center gap-2 flex-wrap sm:flex-nowrap">
+        <div className="flex items-center gap-1">
+          <span className="text-[10px] text-zinc-500 uppercase">иниц</span>
+          <NumberInput value={c.defaultInitMod} onChange={(v) => props.onUpdate(c.id, { defaultInitMod: v })} className="w-12 h-8 text-center text-sm tabular-nums" />
+        </div>
+        {!c.isPlayer && (
+          <div className="flex items-center gap-1">
+            <span className="text-[10px] text-zinc-500 uppercase">HP</span>
+            <NumberInput value={c.defaultHp ?? 0} onChange={(v) => props.onUpdate(c.id, { defaultHp: v || null })} className="w-14 h-8 text-center text-sm tabular-nums" />
+          </div>
+        )}
+        <button
+          onClick={() => {
+            if (confirm(`Удалить ${c.name}?`)) props.onDelete(c.id);
+          }}
+          className={`${btnGhost} w-8 h-8 ml-auto sm:ml-0 text-rose-400 hover:text-rose-300`}
+          aria-label="Удалить"
+        >
+          ×
+        </button>
+      </div>
     </div>
   );
 }

@@ -11,6 +11,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
     name?: string;
     isPlayer?: boolean;
     defaultInitMod?: number;
+    defaultHp?: number | null;
     portraitPath?: string | null;
     notes?: string | null;
   };
@@ -20,6 +21,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
       ...(body.name !== undefined ? { name: body.name.trim() } : {}),
       ...(body.isPlayer !== undefined ? { isPlayer: body.isPlayer } : {}),
       ...(body.defaultInitMod !== undefined ? { defaultInitMod: body.defaultInitMod } : {}),
+      ...(body.defaultHp !== undefined ? { defaultHp: body.defaultHp } : {}),
       ...(body.portraitPath !== undefined ? { portraitPath: body.portraitPath } : {}),
       ...(body.notes !== undefined ? { notes: body.notes } : {}),
     },
