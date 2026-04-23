@@ -61,6 +61,17 @@ const btnEmerald = `${btnBase} bg-emerald-500/20 hover:bg-emerald-500/30 text-em
 const inputBase =
   "w-full min-h-11 px-3 py-2.5 rounded-xl bg-black/30 border border-white/10 focus:border-amber-300/50 outline-none transition text-[15px] placeholder:text-zinc-600";
 
+async function readErrorMessage(res: Response, fallback: string) {
+  try {
+    const data = (await res.json()) as { error?: string; code?: string; hint?: string };
+    return [data.error || fallback, data.code ? `Код: ${data.code}` : "", data.hint || ""]
+      .filter(Boolean)
+      .join("\n");
+  } catch {
+    return fallback;
+  }
+}
+
 // ===================== root =====================
 
 export default function DmClient(props: {
@@ -367,10 +378,10 @@ export default function DmClient(props: {
               const fd = new FormData();
               fd.append("file", file);
               if (name) fd.append("name", name);
-              startTransition(async () => {
-                const res = await fetch("/api/images", { method: "POST", body: fd });
-                if (!res.ok) {
-                  alert("Не удалось загрузить картинку");
+                startTransition(async () => {
+                  const res = await fetch("/api/images", { method: "POST", body: fd });
+                  if (!res.ok) {
+                  alert(await readErrorMessage(res, "Не удалось загрузить картинку"));
                   return;
                 }
                 await refresh();
