@@ -1,8 +1,9 @@
 "use client";
 
-import { useDeferredValue, useEffect, useState, useTransition } from "react";
+import { useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { ConditionDef } from "@/lib/conditions";
+import type { SkillDef, SkillActionDef, DcRow, DcAdjust, LevelDc } from "@/lib/skills";
 
 type Condition = { id: string; slug: string; value: number | null };
 type Combatant = {
@@ -55,12 +56,17 @@ export default function DmClient(props: {
   initialEncounter: Encounter;
   initialCharacters: Character[];
   conditions: ConditionDef[];
+  skills: SkillDef[];
+  simpleDcs: DcRow[];
+  dcAdjustments: DcAdjust[];
+  rarityAdjustments: DcAdjust[];
+  levelDcs: LevelDc[];
 }) {
   const router = useRouter();
   const [enc, setEnc] = useState(props.initialEncounter);
   const [chars, setChars] = useState(props.initialCharacters);
   const [busy, startTransition] = useTransition();
-  const [tab, setTab] = useState<"fight" | "library">("fight");
+  const [tab, setTab] = useState<"fight" | "library" | "skills">("fight");
   const activeCombatant = enc.combatants.find((c) => c.id === enc.activeId);
   const playerCount = enc.combatants.filter((c) => c.isPlayer).length;
   const monsterCount = enc.combatants.length - playerCount;
@@ -196,10 +202,10 @@ export default function DmClient(props: {
 
       {/* ========================= TABS ========================= */}
       <div className="max-w-3xl mx-auto px-3 sm:px-4 mt-4">
-        <div className="glass rounded-2xl p-1 grid grid-cols-2 relative">
+        <div className="glass rounded-2xl p-1 grid grid-cols-3 relative">
           <div
-            className="absolute top-1 bottom-1 w-1/2 rounded-xl bg-gradient-to-b from-amber-200 via-amber-300 to-amber-500 transition-transform duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] shadow-[0_4px_20px_-6px_rgba(232,193,112,0.5)]"
-            style={{ transform: tab === "fight" ? "translateX(0%)" : "translateX(100%)" }}
+            className="absolute top-1 bottom-1 w-1/3 rounded-xl bg-gradient-to-b from-amber-200 via-amber-300 to-amber-500 transition-transform duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] shadow-[0_4px_20px_-6px_rgba(232,193,112,0.5)]"
+            style={{ transform: `translateX(${tab === "fight" ? 0 : tab === "library" ? 100 : 200}%)` }}
           />
           <button
             onClick={() => setTab("fight")}
@@ -213,12 +219,18 @@ export default function DmClient(props: {
           >
             Игроки · {chars.length}
           </button>
+          <button
+            onClick={() => setTab("skills")}
+            className={`relative z-10 py-2.5 text-sm font-semibold transition ${tab === "skills" ? "text-zinc-900" : "text-zinc-300"}`}
+          >
+            Навыки · {props.skills.length}
+          </button>
         </div>
       </div>
 
       {/* ========================= CONTENT ========================= */}
       <div className="max-w-3xl mx-auto">
-        {tab === "fight" ? (
+        {tab === "fight" && (
           <FightTab
             enc={enc}
             chars={chars}
@@ -248,7 +260,8 @@ export default function DmClient(props: {
             removeCondition={removeCondition}
             updateConditionValue={updateConditionValue}
           />
-        ) : (
+        )}
+        {tab === "library" && (
           <LibraryTab
             chars={chars}
             onCreate={(data) =>
@@ -270,6 +283,15 @@ export default function DmClient(props: {
               )
             }
             onDelete={(id) => mutate(() => fetch(`/api/characters/${id}`, { method: "DELETE" }))}
+          />
+        )}
+        {tab === "skills" && (
+          <SkillsTab
+            skills={props.skills}
+            simpleDcs={props.simpleDcs}
+            dcAdjustments={props.dcAdjustments}
+            rarityAdjustments={props.rarityAdjustments}
+            levelDcs={props.levelDcs}
           />
         )}
       </div>
@@ -876,6 +898,255 @@ function CharRow(props: { c: Character; onUpdate: (id: string, data: Partial<Cha
       >
         ×
       </button>
+    </div>
+  );
+}
+
+// ===================== SKILLS TAB =====================
+
+function SkillsTab(props: {
+  skills: SkillDef[];
+  simpleDcs: DcRow[];
+  dcAdjustments: DcAdjust[];
+  rarityAdjustments: DcAdjust[];
+  levelDcs: LevelDc[];
+}) {
+  const [q, setQ] = useState("");
+  const [abilityFilter, setAbilityFilter] = useState<string>("");
+  const [openSkill, setOpenSkill] = useState<string | null>(null);
+  const [showDcRef, setShowDcRef] = useState(false);
+  const deferredQ = useDeferredValue(q);
+  const normalizedQ = deferredQ.trim().toLowerCase();
+
+  const filtered = useMemo(() => {
+    return props.skills
+      .filter((s) => !abilityFilter || s.ability === abilityFilter)
+      .map((s) => {
+        if (!normalizedQ) return { skill: s, actions: s.actions };
+        const skillHit =
+          s.ru.toLowerCase().includes(normalizedQ) ||
+          s.en.toLowerCase().includes(normalizedQ) ||
+          s.desc.toLowerCase().includes(normalizedQ);
+        const actionHits = s.actions.filter(
+          (a) =>
+            a.ru.toLowerCase().includes(normalizedQ) ||
+            a.en.toLowerCase().includes(normalizedQ) ||
+            a.desc.toLowerCase().includes(normalizedQ) ||
+            (a.dc ?? "").toLowerCase().includes(normalizedQ),
+        );
+        if (skillHit) return { skill: s, actions: s.actions };
+        if (actionHits.length > 0) return { skill: s, actions: actionHits };
+        return null;
+      })
+      .filter((v): v is { skill: SkillDef; actions: SkillActionDef[] } => v !== null);
+  }, [props.skills, abilityFilter, normalizedQ]);
+
+  const abilities = Array.from(new Set(props.skills.map((s) => s.ability)));
+
+  return (
+    <div className="px-3 sm:px-4 mt-4 space-y-2.5">
+      <div className="glass rounded-2xl p-3 space-y-3">
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Поиск по навыку, действию или DC..."
+          className={inputBase}
+        />
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            onClick={() => setAbilityFilter("")}
+            className={`min-h-9 text-xs px-2.5 py-1.5 rounded-full border transition active:scale-95 ${!abilityFilter ? "bg-amber-400/15 text-amber-100 border-amber-300/40" : "bg-white/5 text-zinc-300 border-white/10 hover:border-amber-300/40"}`}
+          >
+            Все
+          </button>
+          {abilities.map((ab) => (
+            <button
+              key={ab}
+              onClick={() => setAbilityFilter(ab === abilityFilter ? "" : ab)}
+              className={`min-h-9 text-xs px-2.5 py-1.5 rounded-full border transition active:scale-95 ${abilityFilter === ab ? "bg-amber-400/15 text-amber-100 border-amber-300/40" : "bg-white/5 text-zinc-300 border-white/10 hover:border-amber-300/40"}`}
+            >
+              {ab}
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={() => setShowDcRef((v) => !v)}
+          className={`${btnDark} w-full min-h-11 text-sm`}
+        >
+          {showDcRef ? "Скрыть таблицу DC" : "Показать таблицу DC"}
+        </button>
+        {showDcRef && (
+          <DcReference
+            simpleDcs={props.simpleDcs}
+            dcAdjustments={props.dcAdjustments}
+            rarityAdjustments={props.rarityAdjustments}
+            levelDcs={props.levelDcs}
+          />
+        )}
+      </div>
+
+      {filtered.length === 0 && (
+        <div className="glass rounded-2xl p-6 text-center text-zinc-500 anim-fade-in">
+          <div className="font-serif italic">Ничего не найдено</div>
+          <div className="text-xs mt-1">Попробуй другой запрос или сбрось фильтры</div>
+        </div>
+      )}
+
+      {filtered.map(({ skill, actions }, idx) => {
+        const isOpen = openSkill === skill.slug || normalizedQ.length > 0;
+        return (
+          <div key={skill.slug} className="anim-fade-up" style={{ animationDelay: `${Math.min(idx * 30, 200)}ms` }}>
+            <SkillCard
+              skill={skill}
+              actions={actions}
+              isOpen={isOpen}
+              onToggle={() => setOpenSkill((cur) => (cur === skill.slug ? null : skill.slug))}
+            />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function SkillCard(props: {
+  skill: SkillDef;
+  actions: SkillActionDef[];
+  isOpen: boolean;
+  onToggle: () => void;
+}) {
+  const { skill, actions, isOpen } = props;
+  return (
+    <div className="glass rounded-2xl overflow-hidden relative">
+      <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-amber-300/60 to-amber-600/60" />
+      <button
+        type="button"
+        onClick={props.onToggle}
+        className="w-full text-left grid grid-cols-[1fr_auto] gap-3 p-3 pl-4 items-center"
+      >
+        <div className="min-w-0">
+          <div className="flex items-baseline gap-2 flex-wrap">
+            <span className="font-serif text-lg font-semibold text-amber-50">{skill.ru}</span>
+            <span className="text-[11px] text-zinc-500">{skill.en}</span>
+            <span className="text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-md bg-white/5 border border-white/10 text-zinc-300">
+              {skill.ability}
+            </span>
+          </div>
+          <div className="text-xs text-zinc-400 mt-1 line-clamp-2">{skill.desc}</div>
+        </div>
+        <span className={`${btnGhost} w-10 h-10 text-xl`} aria-hidden="true">
+          {isOpen ? "−" : "+"}
+        </span>
+      </button>
+
+      {isOpen && (
+        <div className="border-t border-white/10 bg-black/20 p-3 space-y-2 anim-fade-in">
+          {actions.length === 0 && (
+            <div className="text-xs text-zinc-500 italic px-1">Действий нет</div>
+          )}
+          {actions.map((a) => (
+            <ActionRow key={a.slug} a={a} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ActionRow(props: { a: SkillActionDef }) {
+  const { a } = props;
+  return (
+    <div className="rounded-xl bg-white/5 border border-white/10 p-3">
+      <div className="flex items-baseline gap-2 flex-wrap">
+        <span className="font-serif text-base font-semibold text-amber-100">{a.ru}</span>
+        <span className="text-[11px] text-zinc-500">{a.en}</span>
+        {a.trained && (
+          <span className="text-[9px] uppercase tracking-widest px-1.5 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-400/30 text-emerald-200">
+            тренированный
+          </span>
+        )}
+        {a.cost && (
+          <span className="text-[9px] uppercase tracking-widest px-1.5 py-0.5 rounded-md bg-white/5 border border-white/10 text-zinc-300">
+            {a.cost}
+          </span>
+        )}
+      </div>
+      {a.traits && a.traits.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          {a.traits.map((t) => (
+            <span key={t} className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-black/30 border border-white/10 text-zinc-400">
+              {t}
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="text-sm text-zinc-200 mt-2 leading-snug">{a.desc}</div>
+      {a.dc && (
+        <div className="mt-2 text-xs text-amber-200/90 bg-amber-400/5 border border-amber-300/20 rounded-lg px-2.5 py-1.5">
+          <span className="text-[10px] uppercase tracking-widest text-amber-300/70 mr-1.5">DC</span>
+          {a.dc}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DcReference(props: {
+  simpleDcs: DcRow[];
+  dcAdjustments: DcAdjust[];
+  rarityAdjustments: DcAdjust[];
+  levelDcs: LevelDc[];
+}) {
+  return (
+    <div className="space-y-3 anim-fade-in">
+      <div>
+        <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 mb-1.5 px-1">Простые DC по рангу</div>
+        <div className="grid grid-cols-5 gap-1.5">
+          {props.simpleDcs.map((r) => (
+            <div key={r.label} className="rounded-lg bg-white/5 border border-white/10 px-2 py-1.5 text-center">
+              <div className="text-[9px] uppercase tracking-wider text-zinc-400 leading-tight">{r.label}</div>
+              <div className="font-serif text-lg gold-text tabular-nums">{r.dc}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div>
+        <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 mb-1.5 px-1">Модификаторы сложности</div>
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+          {props.dcAdjustments.map((r) => (
+            <div key={r.label} className="rounded-lg bg-white/5 border border-white/10 px-2 py-1.5 text-center">
+              <div className="text-[9px] uppercase tracking-wider text-zinc-400 leading-tight">{r.label}</div>
+              <div className={`font-serif text-base tabular-nums ${r.mod < 0 ? "text-emerald-300" : "text-rose-300"}`}>
+                {r.mod > 0 ? `+${r.mod}` : r.mod}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div>
+        <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 mb-1.5 px-1">Редкость</div>
+        <div className="grid grid-cols-4 gap-1.5">
+          {props.rarityAdjustments.map((r) => (
+            <div key={r.label} className="rounded-lg bg-white/5 border border-white/10 px-2 py-1.5 text-center">
+              <div className="text-[9px] uppercase tracking-wider text-zinc-400 leading-tight">{r.label}</div>
+              <div className="font-serif text-base tabular-nums text-rose-300">
+                {r.mod > 0 ? `+${r.mod}` : r.mod}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div>
+        <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 mb-1.5 px-1">DC по уровню</div>
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(52px,1fr))] gap-1.5">
+          {props.levelDcs.map((r) => (
+            <div key={r.level} className="rounded-lg bg-white/5 border border-white/10 px-1.5 py-1 text-center">
+              <div className="text-[9px] uppercase tracking-wider text-zinc-500 leading-tight">ур. {r.level}</div>
+              <div className="font-serif text-sm tabular-nums text-amber-100">{r.dc}</div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
