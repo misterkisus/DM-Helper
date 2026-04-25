@@ -1752,6 +1752,23 @@ function CharRow(props: {
 
 // ===================== SKILLS TAB =====================
 
+const SKILL_TRAIT_LABELS: Record<string, string> = {
+  attack: "атака",
+  auditory: "слуховой",
+  concentrate: "концентрация",
+  downtime: "простой",
+  emotion: "эмоция",
+  exploration: "исследование",
+  fear: "страх",
+  gm: "ведущему",
+  healing: "исцеление",
+  linguistic: "языковой",
+  manipulate: "воздействие",
+  mental: "ментальный",
+  move: "движение",
+  secret: "скрытно",
+};
+
 function SkillsTab(props: {
   skills: SkillDef[];
   simpleDcs: DcRow[];
@@ -1797,7 +1814,7 @@ function SkillsTab(props: {
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Поиск по навыку, действию или DC..."
+          placeholder="Поиск по навыку, действию или КС..."
           className={inputBase}
         />
         <div className="flex flex-wrap gap-1.5">
@@ -1821,7 +1838,7 @@ function SkillsTab(props: {
           onClick={() => setShowDcRef((v) => !v)}
           className={`${btnDark} w-full min-h-11 text-sm`}
         >
-          {showDcRef ? "Скрыть таблицу DC" : "Показать таблицу DC"}
+          {showDcRef ? "Скрыть таблицу КС" : "Показать таблицу КС"}
         </button>
         {showDcRef && (
           <DcReference
@@ -1875,7 +1892,6 @@ function SkillCard(props: {
         <div className="min-w-0">
           <div className="flex items-baseline gap-2 flex-wrap">
             <span className="font-serif text-lg font-semibold text-amber-50">{skill.ru}</span>
-            <span className="text-[11px] text-zinc-500">{skill.en}</span>
             <span className="text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-md bg-white/5 border border-white/10 text-zinc-300">
               {skill.ability}
             </span>
@@ -1907,7 +1923,6 @@ function ActionRow(props: { a: SkillActionDef }) {
     <div className="rounded-xl bg-white/5 border border-white/10 p-3">
       <div className="flex items-baseline gap-2 flex-wrap">
         <span className="font-serif text-base font-semibold text-amber-100">{a.ru}</span>
-        <span className="text-[11px] text-zinc-500">{a.en}</span>
         {a.trained && (
           <span className="text-[9px] uppercase tracking-widest px-1.5 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-400/30 text-emerald-200">
             тренированный
@@ -1923,7 +1938,7 @@ function ActionRow(props: { a: SkillActionDef }) {
         <div className="mt-1.5 flex flex-wrap gap-1">
           {a.traits.map((t) => (
             <span key={t} className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-black/30 border border-white/10 text-zinc-400">
-              {t}
+              {SKILL_TRAIT_LABELS[t] ?? t}
             </span>
           ))}
         </div>
@@ -1931,7 +1946,7 @@ function ActionRow(props: { a: SkillActionDef }) {
       <div className="text-sm text-zinc-200 mt-2 leading-snug">{a.desc}</div>
       {a.dc && (
         <div className="mt-2 text-xs text-amber-200/90 bg-amber-400/5 border border-amber-300/20 rounded-lg px-2.5 py-1.5">
-          <span className="text-[10px] uppercase tracking-widest text-amber-300/70 mr-1.5">DC</span>
+          <span className="text-[10px] uppercase tracking-widest text-amber-300/70 mr-1.5">КС</span>
           {a.dc}
         </div>
       )}
@@ -1948,7 +1963,7 @@ function DcReference(props: {
   return (
     <div className="space-y-3 anim-fade-in">
       <div>
-        <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 mb-1.5 px-1">Простые DC по рангу</div>
+        <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 mb-1.5 px-1">Простые КС по рангу</div>
         <div className="grid grid-cols-5 gap-1.5">
           {props.simpleDcs.map((r) => (
             <div key={r.label} className="rounded-lg bg-white/5 border border-white/10 px-2 py-1.5 text-center">
@@ -1985,7 +2000,7 @@ function DcReference(props: {
         </div>
       </div>
       <div>
-        <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 mb-1.5 px-1">DC по уровню</div>
+        <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 mb-1.5 px-1">КС по уровню</div>
         <div className="grid grid-cols-[repeat(auto-fill,minmax(52px,1fr))] gap-1.5">
           {props.levelDcs.map((r) => (
             <div key={r.level} className="rounded-lg bg-white/5 border border-white/10 px-1.5 py-1 text-center">
